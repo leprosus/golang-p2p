@@ -53,7 +53,6 @@ import (
 
 func main() {
 	for i := 0; i < 10; i++ {
-
 		tcp := p2p.NewTCP("localhost", 8080)
 		res, err := tcp.Send([]byte("hello"))
 		if err != nil {

@@ -26,11 +26,14 @@ func (tcp *TCP) Handle(handler func(req *Request, res *Response)) (err error) {
 			}()
 
 			var (
-				err     error
+				err error
+
 				buf     []byte
 				hasMore bool
-				req     = &Request{}
-				res     = &Response{conn: conn}
+
+				req = &Request{}
+				res = &Response{conn: conn}
+
 				limit   = tcp.GetRequestLimit()
 				timeout = tcp.GetTimeout()
 			)
@@ -42,7 +45,6 @@ func (tcp *TCP) Handle(handler func(req *Request, res *Response)) (err error) {
 
 			reader := bufio.NewReaderSize(conn, limit)
 			buf, hasMore, err = reader.ReadLine()
-
 			if err != nil {
 				return
 			} else if hasMore {
