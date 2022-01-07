@@ -2,60 +2,126 @@ package p2p
 
 import (
 	"bufio"
+	"context"
+	"encoding/gob"
 	"net"
+	"sync"
 	"time"
 )
 
-func (tcp *TCP) Handle(handler func(req *Request, res *Response)) (err error) {
-	tcp.listener, err = net.Listen("tcp", tcp.addr)
+type Server struct {
+	TCP
+	ServerSettings
+
+	mx       sync.RWMutex
+	listener net.Listener
+	handlers map[string]Handler
+}
+
+func NewServer(tcp TCP, stg ServerSettings) (s *Server) {
+	return &Server{
+		TCP:            tcp,
+		ServerSettings: stg,
+
+		mx:       sync.RWMutex{},
+		handlers: map[string]Handler{},
+	}
+}
+
+func (s *Server) Handle(topic string, handler Handler) {
+	s.mx.Lock()
+	s.handlers[topic] = handler
+	s.mx.Unlock()
+}
+
+func (s *Server) Serve() (err error) {
+	var listener net.Listener
+	listener, err = net.Listen("tcp", s.addr)
 	if err != nil {
 		return
 	}
 
-	var conn net.Conn
+	defer func() {
+		err := listener.Close()
+		if err != nil {
+			s.Logger.Error(err.Error())
+		}
+	}()
 
 	for {
-		conn, err = tcp.listener.Accept()
+		var conn net.Conn
+		conn, err = listener.Accept()
 		if err != nil {
+			s.Logger.Error(err.Error())
+
 			return
 		}
 
-		go func(conn net.Conn) {
+		go func(conn net.Conn, stg ServerSettings) {
 			defer func() {
-				_ = conn.Close()
+				err = conn.Close()
+				if err != nil {
+					stg.Logger.Error(err.Error())
+				}
 			}()
 
-			var (
-				err error
-
-				buf     []byte
-				hasMore bool
-
-				req = &Request{}
-				res = &Response{conn: conn}
-
-				limit   = tcp.GetRequestLimit()
-				timeout = tcp.GetTimeout()
-			)
-
-			err = conn.SetDeadline(time.Now().Add(timeout))
+			err := conn.SetDeadline(time.Now().Add(s.Timeout.conn))
 			if err != nil {
-				return
-			}
-
-			reader := bufio.NewReaderSize(conn, limit)
-			buf, hasMore, err = reader.ReadLine()
-			if err != nil {
-				return
-			} else if hasMore {
-				err = RequestTooLarge
+				s.Logger.Warn(err.Error())
 
 				return
 			}
 
-			req.Body = buf
+			metrics := newMetrics(conn.RemoteAddr().String())
 
-			handler(req, res)
-		}(conn)
+			var msg Message
+			err = gob.NewDecoder(bufio.NewReaderSize(conn, stg.Limiter.body)).
+				Decode(&msg)
+			if err != nil {
+				stg.Logger.Error(err.Error())
+
+				return
+			}
+
+			metrics.setTopic(msg.Topic)
+			metrics.fixReadDuration()
+
+			s.mx.RLock()
+			handler, ok := s.handlers[msg.Topic]
+			s.mx.RUnlock()
+			if !ok {
+				stg.Logger.Warn(UnsupportedTopic.Error())
+
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), stg.Timeout.handle)
+			defer cancel()
+
+			msg.Content, err = handler(ctx, msg.Content)
+			if err != nil {
+				stg.Logger.Error(err.Error())
+
+				return
+			}
+
+			metrics.fixHandleDuration()
+
+			err = gob.NewEncoder(conn).
+				Encode(msg)
+			if err != nil {
+				stg.Logger.Error(err.Error())
+
+				return
+			}
+
+			metrics.fixWriteDuration()
+
+			stg.Logger.Info(metrics.string())
+		}(conn, s.ServerSettings)
 	}
+}
+
+func (s *Server) Close() (err error) {
+	return s.listener.Close()
 }
