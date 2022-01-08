@@ -32,6 +32,10 @@ func (stg *ClientSettings) SetConnTimeout(dur time.Duration) {
 	stg.Limiter.conn = dur
 }
 
+func (stg *ClientSettings) SetBodyLimit(limit uint) {
+	stg.Limiter.body = int(limit)
+}
+
 func (stg *ClientSettings) SetRetry(retries uint, delay time.Duration) {
 	stg.Retry.retries = retries
 	stg.Retry.delay = delay

@@ -31,3 +31,7 @@ func (stg *ServerSettings) SetConnTimeout(dur time.Duration) {
 func (stg *ServerSettings) SetHandleTimeout(dur time.Duration) {
 	stg.Limiter.handle = dur
 }
+
+func (stg *ServerSettings) SetBodyLimit(limit uint) {
+	stg.Limiter.body = int(limit)
+}
