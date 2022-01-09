@@ -38,7 +38,7 @@ func main() {
 	}()
 
 	var c uint
-	server.AddBytesHandle("counter", func(ctx context.Context, req []byte) (res []byte, err error) {
+	server.SetBytesHandle("counter", func(ctx context.Context, req []byte) (res []byte, err error) {
 		fmt.Println(">", string(req))
 
 		c++
@@ -173,8 +173,8 @@ settings.SetLogger(yourLogger)
 ### Server
 * p2p.NewServer(tcp, stg) - creates a new server
 * srv.SetContext(ctx) - sets context
-* srv.AddBytesHandle(topic, handler) - sets a bytes handler that processes all request with defined topic
-* srv.AddObjectHandle(topic, handler) - sets an object handler that processes all request with defined topic
+* srv.SetBytesHandle(topic, handler) - sets a bytes handler that processes all request with defined topic
+* srv.SetObjectHandle(topic, handler) - sets an object handler that processes all request with defined topic
 * srv.Serve() (err) - starts to serve
 * srv.Close() (err) - stops and closes the server
 

@@ -15,7 +15,7 @@ type Server struct {
 
 	mx       sync.RWMutex
 	listener net.Listener
-	handlers map[string][]handler
+	handlers map[string]handler
 
 	ctx context.Context
 }
@@ -31,7 +31,7 @@ func NewServer(tcp TCP, stg ServerSettings) (s *Server) {
 		ServerSettings: stg,
 
 		mx:       sync.RWMutex{},
-		handlers: map[string][]handler{},
+		handlers: map[string]handler{},
 
 		ctx: context.Background(),
 	}
@@ -43,21 +43,21 @@ func (s *Server) SetContext(ctx context.Context) {
 	s.mx.Unlock()
 }
 
-func (s *Server) AddBytesHandle(topic string, bh BytesHandler) {
+func (s *Server) SetBytesHandle(topic string, bh BytesHandler) {
 	s.mx.Lock()
-	s.handlers[topic] = append(s.handlers[topic], handler{
+	s.handlers[topic] = handler{
 		Type:      BytesHandlerType,
 		Interface: bh,
-	})
+	}
 	s.mx.Unlock()
 }
 
-func (s *Server) AddObjectHandle(topic string, oh ObjectHandler) {
+func (s *Server) SetObjectHandle(topic string, oh ObjectHandler) {
 	s.mx.Lock()
-	s.handlers[topic] = append(s.handlers[topic], handler{
+	s.handlers[topic] = handler{
 		Type:      ObjectHandlerType,
 		Interface: oh,
-	})
+	}
 	s.mx.Unlock()
 }
 
@@ -115,7 +115,7 @@ func (s *Server) Serve() (err error) {
 
 			s.mx.RLock()
 			ctx := s.ctx
-			handlers, ok := s.handlers[msg.Topic]
+			handler, ok := s.handlers[msg.Topic]
 			s.mx.RUnlock()
 			if !ok {
 				stg.Logger.Warn(UnsupportedTopic.Error())
@@ -123,44 +123,43 @@ func (s *Server) Serve() (err error) {
 				return
 			}
 
-			ctx, cancel := context.WithTimeout(ctx, stg.Timeout.handle)
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, stg.Timeout.handle)
 			defer cancel()
 
 			var reqObj interface{}
 
-			for _, handler := range handlers {
-				switch handler.Type {
-				case BytesHandlerType:
-					msg.Content, msg.Error = handler.Interface.(BytesHandler)(ctx, msg.Content)
-					if msg.Error != nil {
-						stg.Logger.Error(msg.Error.Error())
+			switch handler.Type {
+			case BytesHandlerType:
+				msg.Content, msg.Error = handler.Interface.(BytesHandler)(ctx, msg.Content)
+				if msg.Error != nil {
+					stg.Logger.Error(msg.Error.Error())
 
-						continue
-					}
-				case ObjectHandlerType:
-					if reqObj == nil {
-						reqObj, err = Decode(msg.Content)
-						if err != nil {
-							stg.Logger.Error(msg.Error.Error())
-
-							continue
-						}
-					}
-
-					var resObj interface{}
-					resObj, msg.Error = handler.Interface.(ObjectHandler)(ctx, reqObj)
-					if msg.Error != nil {
-						stg.Logger.Error(msg.Error.Error())
-
-						continue
-					}
-
-					msg.Content, err = Encode(resObj)
+					return
+				}
+			case ObjectHandlerType:
+				if reqObj == nil {
+					reqObj, err = Decode(msg.Content)
 					if err != nil {
 						stg.Logger.Error(msg.Error.Error())
 
-						continue
+						return
 					}
+				}
+
+				var resObj interface{}
+				resObj, msg.Error = handler.Interface.(ObjectHandler)(ctx, reqObj)
+				if msg.Error != nil {
+					stg.Logger.Error(msg.Error.Error())
+
+					return
+				}
+
+				msg.Content, err = Encode(resObj)
+				if err != nil {
+					stg.Logger.Error(msg.Error.Error())
+
+					return
 				}
 			}
 
