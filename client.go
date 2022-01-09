@@ -140,6 +140,12 @@ func (c *Client) try(topic string, req []byte) (res []byte, err error) {
 
 	metrics.fixReadDuration()
 
+	if msg.Error != nil {
+		err = msg.Error
+
+		return
+	}
+
 	c.Logger.Info(metrics.string())
 
 	res = msg.Content
