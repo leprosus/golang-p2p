@@ -32,7 +32,7 @@ func NewServer(tcp TCP, stg ServerSettings) (s *Server) {
 	}
 }
 
-func (s *Server) Context(ctx context.Context) {
+func (s *Server) SetContext(ctx context.Context) {
 	s.mx.Lock()
 	s.ctx = ctx
 	s.mx.Unlock()
