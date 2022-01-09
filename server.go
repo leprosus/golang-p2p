@@ -15,9 +15,14 @@ type Server struct {
 
 	mx       sync.RWMutex
 	listener net.Listener
-	handlers map[string]Handler
+	handlers map[string][]handler
 
 	ctx context.Context
+}
+
+type handler struct {
+	Type      HandlerType
+	Interface interface{}
 }
 
 func NewServer(tcp TCP, stg ServerSettings) (s *Server) {
@@ -26,7 +31,7 @@ func NewServer(tcp TCP, stg ServerSettings) (s *Server) {
 		ServerSettings: stg,
 
 		mx:       sync.RWMutex{},
-		handlers: map[string]Handler{},
+		handlers: map[string][]handler{},
 
 		ctx: context.Background(),
 	}
@@ -38,9 +43,21 @@ func (s *Server) SetContext(ctx context.Context) {
 	s.mx.Unlock()
 }
 
-func (s *Server) Handle(topic string, handler Handler) {
+func (s *Server) AddBytesHandle(topic string, bh BytesHandler) {
 	s.mx.Lock()
-	s.handlers[topic] = handler
+	s.handlers[topic] = append(s.handlers[topic], handler{
+		Type:      BytesHandlerType,
+		Interface: bh,
+	})
+	s.mx.Unlock()
+}
+
+func (s *Server) AddObjectHandle(topic string, oh ObjectHandler) {
+	s.mx.Lock()
+	s.handlers[topic] = append(s.handlers[topic], handler{
+		Type:      ObjectHandlerType,
+		Interface: oh,
+	})
 	s.mx.Unlock()
 }
 
@@ -98,7 +115,7 @@ func (s *Server) Serve() (err error) {
 
 			s.mx.RLock()
 			ctx := s.ctx
-			handler, ok := s.handlers[msg.Topic]
+			handlers, ok := s.handlers[msg.Topic]
 			s.mx.RUnlock()
 			if !ok {
 				stg.Logger.Warn(UnsupportedTopic.Error())
@@ -109,11 +126,42 @@ func (s *Server) Serve() (err error) {
 			ctx, cancel := context.WithTimeout(ctx, stg.Timeout.handle)
 			defer cancel()
 
-			msg.Content, err = handler(ctx, msg.Content)
-			if err != nil {
-				stg.Logger.Error(err.Error())
+			var reqObj interface{}
 
-				return
+			for _, handler := range handlers {
+				switch handler.Type {
+				case BytesHandlerType:
+					msg.Content, msg.Error = handler.Interface.(BytesHandler)(ctx, msg.Content)
+					if msg.Error != nil {
+						stg.Logger.Error(msg.Error.Error())
+
+						continue
+					}
+				case ObjectHandlerType:
+					if reqObj == nil {
+						reqObj, err = Decode(msg.Content)
+						if err != nil {
+							stg.Logger.Error(msg.Error.Error())
+
+							continue
+						}
+					}
+
+					var resObj interface{}
+					resObj, msg.Error = handler.Interface.(ObjectHandler)(ctx, reqObj)
+					if msg.Error != nil {
+						stg.Logger.Error(msg.Error.Error())
+
+						continue
+					}
+
+					msg.Content, err = Encode(resObj)
+					if err != nil {
+						stg.Logger.Error(msg.Error.Error())
+
+						continue
+					}
+				}
 			}
 
 			metrics.fixHandleDuration()

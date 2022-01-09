@@ -38,7 +38,7 @@ func main() {
 	}()
 
 	var c uint
-	server.Handle("counter", func(ctx context.Context, req []byte) (res []byte, err error) {
+	server.AddBytesHandle("counter", func(ctx context.Context, req []byte) (res []byte, err error) {
 		fmt.Println(">", string(req))
 
 		c++
@@ -52,7 +52,6 @@ func main() {
 		log.Panicln(err)
 	}
 }
-
 ```
 
 ## Client example
@@ -74,7 +73,7 @@ func main() {
 	client := p2p.NewClient(tcp, settings)
 
 	for i := 0; i < 10; i++ {
-		res, err := client.Send("counter", []byte(fmt.Sprintf("hello %d", i+1)))
+		res, err := client.SendBytes("counter", []byte(fmt.Sprintf("hello %d", i+1)))
 		if err != nil {
 			log.Panicln(err)
 		}
@@ -82,7 +81,6 @@ func main() {
 		fmt.Println("<", string(res))
 	}
 }
-
 ```
 
 ## Running
@@ -175,7 +173,8 @@ settings.SetLogger(yourLogger)
 ### Server
 * p2p.NewServer(tcp, stg) - creates a new server
 * srv.SetContext(ctx) - sets context
-* srv.Handle(topic, handler) - sets a handler that processes all request with defined topic
+* srv.AddBytesHandle(topic, handler) - sets a bytes handler that processes all request with defined topic
+* srv.AddObjectHandle(topic, handler) - sets an object handler that processes all request with defined topic
 * srv.Serve() (err) - starts to serve
 * srv.Close() (err) - stops and closes the server
 
@@ -188,4 +187,5 @@ settings.SetLogger(yourLogger)
 
 ### Client
 * NewClient(tcp, stg) (clt) - creates a new client
-* clt.Send(topic, req) (res, err) - sends bytes to a server by the topic
+* clt.SendBytes(topic, req) (res, err) - sends bytes to a server by the topic
+* clt.SendObject(topic, req) (res, err) - sends object to a server by the topic
