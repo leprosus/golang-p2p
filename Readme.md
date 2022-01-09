@@ -174,6 +174,7 @@ settings.SetLogger(yourLogger)
 
 ### Server
 * p2p.NewServer(tcp, stg) - creates a new server
+* srv.SetContext(ctx) - sets context
 * srv.Handle(topic, handler) - sets a handler that processes all request with defined topic
 * srv.Serve() (err) - starts to serve
 * srv.Close() (err) - stops and closes the server

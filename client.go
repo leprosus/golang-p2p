@@ -4,25 +4,32 @@ import (
 	"bufio"
 	"encoding/gob"
 	"net"
+	"sync"
 	"time"
 )
 
 type Client struct {
 	TCP
 	ClientSettings
+
+	mx sync.RWMutex
 }
 
 func NewClient(tcp TCP, stg ClientSettings) (c *Client) {
 	return &Client{
 		TCP:            tcp,
 		ClientSettings: stg,
+
+		mx: sync.RWMutex{},
 	}
 }
 
 func (c *Client) Send(topic string, req []byte) (res []byte, err error) {
 	var retries = c.ClientSettings.retries
 	for retries > 0 {
+		c.mx.RLock()
 		factor := c.ClientSettings.retries - retries
+		c.mx.RUnlock()
 		time.Sleep(time.Duration(factor) * c.ClientSettings.delay)
 		retries--
 

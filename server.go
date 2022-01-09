@@ -16,6 +16,8 @@ type Server struct {
 	mx       sync.RWMutex
 	listener net.Listener
 	handlers map[string]Handler
+
+	ctx context.Context
 }
 
 func NewServer(tcp TCP, stg ServerSettings) (s *Server) {
@@ -25,7 +27,15 @@ func NewServer(tcp TCP, stg ServerSettings) (s *Server) {
 
 		mx:       sync.RWMutex{},
 		handlers: map[string]Handler{},
+
+		ctx: context.Background(),
 	}
+}
+
+func (s *Server) Context(ctx context.Context) {
+	s.mx.Lock()
+	s.ctx = ctx
+	s.mx.Unlock()
 }
 
 func (s *Server) Handle(topic string, handler Handler) {
@@ -87,6 +97,7 @@ func (s *Server) Serve() (err error) {
 			metrics.fixReadDuration()
 
 			s.mx.RLock()
+			ctx := s.ctx
 			handler, ok := s.handlers[msg.Topic]
 			s.mx.RUnlock()
 			if !ok {
@@ -95,7 +106,7 @@ func (s *Server) Serve() (err error) {
 				return
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), stg.Timeout.handle)
+			ctx, cancel := context.WithTimeout(ctx, stg.Timeout.handle)
 			defer cancel()
 
 			msg.Content, err = handler(ctx, msg.Content)
