@@ -10,8 +10,8 @@ import (
 )
 
 type Server struct {
-	TCP
-	ServerSettings
+	tcp TCP
+	stg ServerSettings
 
 	mx       sync.RWMutex
 	listener net.Listener
@@ -27,8 +27,8 @@ type handler struct {
 
 func NewServer(tcp TCP, stg ServerSettings) (s *Server) {
 	return &Server{
-		TCP:            tcp,
-		ServerSettings: stg,
+		tcp: tcp,
+		stg: stg,
 
 		mx:       sync.RWMutex{},
 		handlers: map[string]handler{},
@@ -63,7 +63,7 @@ func (s *Server) SetObjectHandle(topic string, oh ObjectHandler) {
 
 func (s *Server) Serve() (err error) {
 	var listener net.Listener
-	listener, err = net.Listen("tcp", s.addr)
+	listener, err = net.Listen("tcp", s.tcp.addr)
 	if err != nil {
 		return
 	}
@@ -71,7 +71,7 @@ func (s *Server) Serve() (err error) {
 	defer func() {
 		err := listener.Close()
 		if err != nil {
-			s.Logger.Error(err.Error())
+			s.stg.Logger.Error(err.Error())
 		}
 	}()
 
@@ -79,7 +79,7 @@ func (s *Server) Serve() (err error) {
 		var conn net.Conn
 		conn, err = listener.Accept()
 		if err != nil {
-			s.Logger.Error(err.Error())
+			s.stg.Logger.Error(err.Error())
 
 			return
 		}
@@ -92,9 +92,9 @@ func (s *Server) Serve() (err error) {
 				}
 			}()
 
-			err := conn.SetDeadline(time.Now().Add(s.Timeout.conn))
+			err := conn.SetDeadline(time.Now().Add(s.stg.Timeout.conn))
 			if err != nil {
-				s.Logger.Warn(err.Error())
+				s.stg.Logger.Warn(err.Error())
 
 				return
 			}
@@ -176,7 +176,7 @@ func (s *Server) Serve() (err error) {
 			metrics.fixWriteDuration()
 
 			stg.Logger.Info(metrics.string())
-		}(conn, s.ServerSettings)
+		}(conn, s.stg)
 	}
 }
 

@@ -10,33 +10,33 @@ import (
 )
 
 type Client struct {
-	TCP
-	ClientSettings
+	tcp TCP
+	stg ClientSettings
 
 	mx sync.RWMutex
 }
 
 func NewClient(tcp TCP, stg ClientSettings) (c *Client) {
 	return &Client{
-		TCP:            tcp,
-		ClientSettings: stg,
+		tcp: tcp,
+		stg: stg,
 
 		mx: sync.RWMutex{},
 	}
 }
 
 func (c *Client) SendBytes(topic string, req []byte) (res []byte, err error) {
-	var retries = c.ClientSettings.retries
+	var retries = c.stg.retries
 	for retries > 0 {
 		c.mx.RLock()
-		factor := c.ClientSettings.retries - retries
+		factor := c.stg.retries - retries
 		c.mx.RUnlock()
-		time.Sleep(time.Duration(factor) * c.ClientSettings.delay)
+		time.Sleep(time.Duration(factor) * c.stg.delay)
 		retries--
 
 		res, err = c.try(topic, req)
 		if err != nil {
-			c.ClientSettings.Logger.Error(err.Error())
+			c.stg.Logger.Error(err.Error())
 
 			continue
 		}
@@ -54,12 +54,12 @@ func (c *Client) SendObject(topic string, req interface{}) (res interface{}, err
 		return
 	}
 
-	var retries = c.ClientSettings.retries
+	var retries = c.stg.retries
 	for retries > 0 {
 		c.mx.RLock()
-		factor := c.ClientSettings.retries - retries
+		factor := c.stg.retries - retries
 		c.mx.RUnlock()
-		time.Sleep(time.Duration(factor) * c.ClientSettings.delay)
+		time.Sleep(time.Duration(factor) * c.stg.delay)
 		retries--
 
 		var resBs []byte
@@ -69,7 +69,7 @@ func (c *Client) SendObject(topic string, req interface{}) (res interface{}, err
 				return
 			}
 
-			c.ClientSettings.Logger.Error(err.Error())
+			c.stg.Logger.Error(err.Error())
 
 			continue
 		}
@@ -87,9 +87,9 @@ func (c *Client) SendObject(topic string, req interface{}) (res interface{}, err
 
 func (c *Client) try(topic string, req []byte) (res []byte, err error) {
 	var conn net.Conn
-	conn, err = net.Dial("tcp", c.TCP.addr)
+	conn, err = net.Dial("tcp", c.tcp.addr)
 	if err != nil {
-		c.Logger.Error(err.Error())
+		c.stg.Logger.Error(err.Error())
 
 		err = ConnectionError
 
@@ -99,13 +99,13 @@ func (c *Client) try(topic string, req []byte) (res []byte, err error) {
 	defer func() {
 		err = conn.Close()
 		if err != nil {
-			c.Logger.Error(err.Error())
+			c.stg.Logger.Error(err.Error())
 		}
 	}()
 
-	err = conn.SetDeadline(time.Now().Add(c.Timeout.conn))
+	err = conn.SetDeadline(time.Now().Add(c.stg.Timeout.conn))
 	if err != nil {
-		c.Logger.Error(err.Error())
+		c.stg.Logger.Error(err.Error())
 
 		err = PresetConnectionError
 
@@ -123,17 +123,17 @@ func (c *Client) try(topic string, req []byte) (res []byte, err error) {
 	err = gob.NewEncoder(conn).
 		Encode(msg)
 	if err != nil {
-		c.Logger.Error(err.Error())
+		c.stg.Logger.Error(err.Error())
 
 		return
 	}
 
 	metrics.fixWriteDuration()
 
-	err = gob.NewDecoder(bufio.NewReaderSize(conn, c.Limiter.body)).
+	err = gob.NewDecoder(bufio.NewReaderSize(conn, c.stg.Limiter.body)).
 		Decode(&msg)
 	if err != nil {
-		c.Logger.Error(err.Error())
+		c.stg.Logger.Error(err.Error())
 
 		return
 	}
@@ -146,7 +146,7 @@ func (c *Client) try(topic string, req []byte) (res []byte, err error) {
 		return
 	}
 
-	c.Logger.Info(metrics.string())
+	c.stg.Logger.Info(metrics.string())
 
 	res = msg.Content
 
