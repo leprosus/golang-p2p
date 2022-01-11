@@ -3,7 +3,6 @@ package p2p
 import (
 	"bufio"
 	"encoding/gob"
-	"errors"
 	"net"
 	"sync"
 	"time"
@@ -25,7 +24,7 @@ func NewClient(tcp TCP, stg ClientSettings) (c *Client) {
 	}
 }
 
-func (c *Client) SendBytes(topic string, req []byte) (res []byte, err error) {
+func (c *Client) Send(topic string, req Request) (res Response, err error) {
 	var retries = c.stg.retries
 	for retries > 0 {
 		c.mx.RLock()
@@ -47,45 +46,7 @@ func (c *Client) SendBytes(topic string, req []byte) (res []byte, err error) {
 	return
 }
 
-func (c *Client) SendObject(topic string, req interface{}) (res interface{}, err error) {
-	var reqBs []byte
-	reqBs, err = Encode(req)
-	if err != nil {
-		return
-	}
-
-	var retries = c.stg.retries
-	for retries > 0 {
-		c.mx.RLock()
-		factor := c.stg.retries - retries
-		c.mx.RUnlock()
-		time.Sleep(time.Duration(factor) * c.stg.delay)
-		retries--
-
-		var resBs []byte
-		resBs, err = c.try(topic, reqBs)
-		if err != nil {
-			if errors.Is(err, ConnectionError) || errors.Is(err, PresetConnectionError) {
-				return
-			}
-
-			c.stg.Logger.Error(err.Error())
-
-			continue
-		}
-
-		res, err = Decode(resBs)
-		if err != nil {
-			return
-		}
-
-		return
-	}
-
-	return
-}
-
-func (c *Client) try(topic string, req []byte) (res []byte, err error) {
+func (c *Client) try(topic string, req Request) (res Response, err error) {
 	var conn net.Conn
 	conn, err = net.Dial("tcp", c.tcp.addr)
 	if err != nil {
@@ -117,7 +78,7 @@ func (c *Client) try(topic string, req []byte) (res []byte, err error) {
 
 	msg := Message{
 		Topic:   topic,
-		Content: req,
+		Content: req.bs,
 	}
 
 	err = gob.NewEncoder(conn).
@@ -148,7 +109,7 @@ func (c *Client) try(topic string, req []byte) (res []byte, err error) {
 
 	c.stg.Logger.Info(metrics.string())
 
-	res = msg.Content
+	res.bs = msg.Content
 
 	return
 }

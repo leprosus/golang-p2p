@@ -14,14 +14,9 @@ type Server struct {
 	stg ServerSettings
 
 	mx       sync.RWMutex
-	handlers map[string]handler
+	handlers map[string]Handler
 
 	ctx context.Context
-}
-
-type handler struct {
-	Type      HandlerType
-	Interface interface{}
 }
 
 func NewServer(tcp TCP, stg ServerSettings) (s *Server) {
@@ -30,7 +25,7 @@ func NewServer(tcp TCP, stg ServerSettings) (s *Server) {
 		stg: stg,
 
 		mx:       sync.RWMutex{},
-		handlers: map[string]handler{},
+		handlers: map[string]Handler{},
 
 		ctx: context.Background(),
 	}
@@ -42,21 +37,9 @@ func (s *Server) SetContext(ctx context.Context) {
 	s.mx.Unlock()
 }
 
-func (s *Server) SetBytesHandle(topic string, bh BytesHandler) {
+func (s *Server) SetHandle(topic string, handler Handler) {
 	s.mx.Lock()
-	s.handlers[topic] = handler{
-		Type:      BytesHandlerType,
-		Interface: bh,
-	}
-	s.mx.Unlock()
-}
-
-func (s *Server) SetObjectHandle(topic string, oh ObjectHandler) {
-	s.mx.Lock()
-	s.handlers[topic] = handler{
-		Type:      ObjectHandlerType,
-		Interface: oh,
-	}
+	s.handlers[topic] = handler
 	s.mx.Unlock()
 }
 
@@ -126,41 +109,17 @@ func (s *Server) Serve() (err error) {
 			ctx, cancel = context.WithTimeout(ctx, stg.Timeout.handle)
 			defer cancel()
 
-			var reqObj interface{}
-
-			switch handler.Type {
-			case BytesHandlerType:
-				msg.Content, msg.Error = handler.Interface.(BytesHandler)(ctx, msg.Content)
-				if msg.Error != nil {
-					stg.Logger.Error(msg.Error.Error())
-
-					return
-				}
-			case ObjectHandlerType:
-				if reqObj == nil {
-					reqObj, err = Decode(msg.Content)
-					if err != nil {
-						stg.Logger.Error(msg.Error.Error())
-
-						return
-					}
-				}
-
-				var resObj interface{}
-				resObj, msg.Error = handler.Interface.(ObjectHandler)(ctx, reqObj)
-				if msg.Error != nil {
-					stg.Logger.Error(msg.Error.Error())
-
-					return
-				}
-
-				msg.Content, err = Encode(resObj)
-				if err != nil {
-					stg.Logger.Error(msg.Error.Error())
-
-					return
-				}
+			var (
+				req = Request{bs: msg.Content}
+				res Response
+			)
+			res, err = handler(ctx, req)
+			if err != nil {
+				stg.Logger.Error(err.Error())
 			}
+
+			msg.Content = res.bs
+			msg.Error = err
 
 			metrics.fixHandleDuration()
 

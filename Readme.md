@@ -25,18 +25,31 @@ import (
 	p2p "github.com/leprosus/golang-p2p"
 )
 
+type Hello struct {
+	Text string
+}
+
+type Buy struct {
+	Text string
+}
+
 func main() {
 	tcp := p2p.NewTCP("localhost", 8080)
 	settings := p2p.NewServerSettings()
 
 	server := p2p.NewServer(tcp, settings)
 
-	var c uint
-	server.SetBytesHandle("counter", func(ctx context.Context, req []byte) (res []byte, err error) {
-		fmt.Println(">", string(req))
+	server.SetHandle("dialog", func(ctx context.Context, req p2p.Request) (res p2p.Response, err error) {
+		hello := Hello{}
+		err = req.GetGob(&hello)
+		if err != nil {
+			return
+		}
 
-		c++
-		res = []byte(fmt.Sprintf("buy %d", c))
+		fmt.Printf("> Hello: %s\n", hello.Text)
+
+		buy := Buy{Text: hello.Text}
+		err = res.SetGob(buy)
 
 		return
 	})
@@ -60,6 +73,14 @@ import (
 	p2p "github.com/leprosus/golang-p2p"
 )
 
+type Hello struct {
+	Text string
+}
+
+type Buy struct {
+	Text string
+}
+
 func main() {
 	tcp := p2p.NewTCP("localhost", 8080)
 	settings := p2p.NewClientSettings()
@@ -67,12 +88,27 @@ func main() {
 	client := p2p.NewClient(tcp, settings)
 
 	for i := 0; i < 10; i++ {
-		res, err := client.SendBytes("counter", []byte(fmt.Sprintf("hello %d", i+1)))
+		hello := Hello{Text: fmt.Sprintf("User #%d", i+1)}
+
+		req := p2p.Request{}
+		err := req.SetGob(hello)
 		if err != nil {
 			log.Panicln(err)
 		}
 
-		fmt.Println("<", string(res))
+		var res p2p.Response
+		res, err = client.Send("dialog", req)
+		if err != nil {
+			log.Panicln(err)
+		}
+
+		var buy Buy
+		err = res.GetGob(&buy)
+		if err != nil {
+			log.Panicln(err)
+		}
+
+		fmt.Printf("> Buy: %s\n", buy.Text)
 	}
 }
 ```
@@ -84,51 +120,51 @@ If you run the server and the client separately then you see:
 * in the server stdout:
 
 ```text
-> hello 1
-counter: addr (127.0.0.1:54014), read (344 µs), handle (26 µs), write (97 µs), total (468 µs)
-> hello 2
-counter: addr (127.0.0.1:54015), read (263 µs), handle (19 µs), write (50 µs), total (333 µs)
-> hello 3
-counter: addr (127.0.0.1:54016), read (310 µs), handle (44 µs), write (152 µs), total (507 µs)
-> hello 4
-counter: addr (127.0.0.1:54017), read (143 µs), handle (12 µs), write (48 µs), total (204 µs)
-> hello 5
-counter: addr (127.0.0.1:54018), read (118 µs), handle (12 µs), write (38 µs), total (169 µs)
-> hello 6
-counter: addr (127.0.0.1:54019), read (154 µs), handle (16 µs), write (51 µs), total (222 µs)
-> hello 7
-counter: addr (127.0.0.1:54020), read (133 µs), handle (9 µs), write (47 µs), total (190 µs)
-> hello 8
-counter: addr (127.0.0.1:54021), read (167 µs), handle (18 µs), write (48 µs), total (234 µs)
-> hello 9
-counter: addr (127.0.0.1:54022), read (212 µs), handle (20 µs), write (69 µs), total (302 µs)
-> hello 10
-counter: addr (127.0.0.1:54023), read (226 µs), handle (25 µs), write (47 µs), total (299 µs)
+> Hello: User #1
+dialog: addr (127.0.0.1:52539), read (335 µs), handle (124 µs), write (95 µs), total (555 µs)
+> Hello: User #2
+dialog: addr (127.0.0.1:52540), read (530 µs), handle (694 µs), write (169 µs), total (1 ms)
+> Hello: User #3
+dialog: addr (127.0.0.1:52541), read (410 µs), handle (194 µs), write (119 µs), total (724 µs)
+> Hello: User #4
+dialog: addr (127.0.0.1:52542), read (280 µs), handle (113 µs), write (51 µs), total (446 µs)
+> Hello: User #5
+dialog: addr (127.0.0.1:52543), read (218 µs), handle (90 µs), write (41 µs), total (350 µs)
+> Hello: User #6
+dialog: addr (127.0.0.1:52544), read (133 µs), handle (105 µs), write (62 µs), total (301 µs)
+> Hello: User #7
+dialog: addr (127.0.0.1:52545), read (267 µs), handle (78 µs), write (55 µs), total (401 µs)
+> Hello: User #8
+dialog: addr (127.0.0.1:52546), read (155 µs), handle (77 µs), write (40 µs), total (273 µs)
+> Hello: User #9
+dialog: addr (127.0.0.1:52547), read (275 µs), handle (143 µs), write (58 µs), total (477 µs)
+> Hello: User #10
+dialog: addr (127.0.0.1:52548), read (379 µs), handle (202 µs), write (77 µs), total (658 µs)
 ```
 
 * in the client stdout:
 
 ```text
-counter: addr (127.0.0.1:8080), write (216 µs), read (470 µs), total (687 µs)
-< buy 1
-counter: addr (127.0.0.1:8080), write (108 µs), read (321 µs), total (430 µs)
-< buy 2
-counter: addr (127.0.0.1:8080), write (151 µs), read (699 µs), total (851 µs)
-< buy 3
-counter: addr (127.0.0.1:8080), write (61 µs), read (295 µs), total (356 µs)
-< buy 4
-counter: addr (127.0.0.1:8080), write (56 µs), read (246 µs), total (303 µs)
-< buy 5
-counter: addr (127.0.0.1:8080), write (58 µs), read (300 µs), total (358 µs)
-< buy 6
-counter: addr (127.0.0.1:8080), write (55 µs), read (267 µs), total (322 µs)
-< buy 7
-counter: addr (127.0.0.1:8080), write (59 µs), read (327 µs), total (387 µs)
-< buy 8
-counter: addr (127.0.0.1:8080), write (78 µs), read (354 µs), total (432 µs)
-< buy 9
-counter: addr (127.0.0.1:8080), write (97 µs), read (361 µs), total (459 µs)
-< buy 10
+dialog: addr (127.0.0.1:8080), write (423 µs), read (1 ms), total (1 ms)
+> Buy: User #1
+dialog: addr (127.0.0.1:8080), write (127 µs), read (408 µs), total (536 µs)
+> Buy: User #2
+dialog: addr (127.0.0.1:8080), write (105 µs), read (520 µs), total (625 µs)
+> Buy: User #3
+dialog: addr (127.0.0.1:8080), write (43 µs), read (306 µs), total (349 µs)
+> Buy: User #4
+dialog: addr (127.0.0.1:8080), write (43 µs), read (382 µs), total (426 µs)
+> Buy: User #5
+dialog: addr (127.0.0.1:8080), write (46 µs), read (334 µs), total (380 µs)
+> Buy: User #6
+dialog: addr (127.0.0.1:8080), write (59 µs), read (353 µs), total (413 µs)
+> Buy: User #7
+dialog: addr (127.0.0.1:8080), write (71 µs), read (306 µs), total (377 µs)
+> Buy: User #8
+dialog: addr (127.0.0.1:8080), write (39 µs), read (329 µs), total (368 µs)
+> Buy: User #9
+dialog: addr (127.0.0.1:8080), write (123 µs), read (387 µs), total (510 µs)
+> Buy: User #10
 ```
 
 * logging
@@ -167,8 +203,7 @@ settings.SetLogger(yourLogger)
 ### Server
 * p2p.NewServer(tcp, stg) - creates a new server
 * srv.SetContext(ctx) - sets context
-* srv.SetBytesHandle(topic, handler) - sets a bytes handler that processes all request with defined topic
-* srv.SetObjectHandle(topic, handler) - sets an object handler that processes all request with defined topic
+* srv.SetHandle(topic, handler) - sets a handler that processes all request with defined topic
 * srv.Serve() (err) - starts to serve
 
 ### Client settings initialization
@@ -180,5 +215,22 @@ settings.SetLogger(yourLogger)
 
 ### Client
 * NewClient(tcp, stg) (clt) - creates a new client
-* clt.SendBytes(topic, req) (res, err) - sends bytes to a server by the topic
-* clt.SendObject(topic, req) (res, err) - sends object to a server by the topic
+* clt.Send(topic, req) (res, err) - sends a request to a server by the topic
+
+### Request
+* req.SetBytes(bs) - sets bytes to the request
+* req.GetBytes() (bs) - gets bytes from the request
+* req.SetGob(obj) (err) - encodes to Gob and sets structure to the request
+* req.GetGob(obj) (err) - decode from Gob and gets structure from the request
+* req.SetJson(obj) (err) - encodes to Json and sets structure to the request
+* req.GetJson(obj) (err) - decode from Json and gets structure from the request
+* req.String() (str) - returns string from the request
+
+### Response
+* res.SetBytes(bs) - sets bytes to the response
+* res.GetBytes() (bs) - gets bytes from the response
+* res.SetGob(obj) (err) - encodes to Gob and sets structure to the response
+* res.GetGob(obj) (err) - decode from Gob and gets structure from the response
+* res.SetJson(obj) (err) - encodes to Json and sets structure to the response
+* res.GetJson(obj) (err) - decode from Json and gets structure from the response
+* res.String() (str) - returns string from the response
