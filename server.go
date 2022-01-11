@@ -14,7 +14,6 @@ type Server struct {
 	stg ServerSettings
 
 	mx       sync.RWMutex
-	listener net.Listener
 	handlers map[string]handler
 
 	ctx context.Context
@@ -178,8 +177,4 @@ func (s *Server) Serve() (err error) {
 			stg.Logger.Info(metrics.string())
 		}(conn, s.stg)
 	}
-}
-
-func (s *Server) Close() (err error) {
-	return s.listener.Close()
 }

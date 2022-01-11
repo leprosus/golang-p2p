@@ -30,12 +30,6 @@ func main() {
 	settings := p2p.NewServerSettings()
 
 	server := p2p.NewServer(tcp, settings)
-	defer func() {
-		err := server.Close()
-		if err != nil {
-			log.Panicln(err)
-		}
-	}()
 
 	var c uint
 	server.SetBytesHandle("counter", func(ctx context.Context, req []byte) (res []byte, err error) {
@@ -176,7 +170,6 @@ settings.SetLogger(yourLogger)
 * srv.SetBytesHandle(topic, handler) - sets a bytes handler that processes all request with defined topic
 * srv.SetObjectHandle(topic, handler) - sets an object handler that processes all request with defined topic
 * srv.Serve() (err) - starts to serve
-* srv.Close() (err) - stops and closes the server
 
 ### Client settings initialization
 * p2p.NewClientSettings() (stg) - creates a new server's settings
