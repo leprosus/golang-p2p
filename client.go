@@ -9,15 +9,17 @@ import (
 )
 
 type Client struct {
-	tcp TCP
-	stg ClientSettings
+	tcp *TCP
+	rsa *RSA
+	stg *ClientSettings
 
 	mx sync.RWMutex
 }
 
-func NewClient(tcp TCP, stg ClientSettings) (c *Client) {
+func NewClient(tcp *TCP, rsa *RSA, stg *ClientSettings) (c *Client) {
 	return &Client{
 		tcp: tcp,
+		rsa: rsa,
 		stg: stg,
 
 		mx: sync.RWMutex{},
@@ -74,6 +76,24 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 	}
 
 	metrics := newMetrics(conn.RemoteAddr().String())
+
+	// RSA handshake
+	err = gob.NewEncoder(conn).Encode(c.rsa.PublicKey())
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	var pk PublicKey
+	err = gob.NewDecoder(conn).Decode(&pk)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	metrics.fixHandshake()
 	metrics.setTopic(topic)
 
 	msg := Message{
@@ -81,8 +101,15 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 		Content: req.bs,
 	}
 
-	err = gob.NewEncoder(conn).
-		Encode(msg)
+	var cm CryptMessage
+	cm, err = msg.Encode(pk)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	err = gob.NewEncoder(conn).Encode(cm)
 	if err != nil {
 		c.stg.Logger.Error(err.Error())
 
@@ -91,8 +118,14 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 
 	metrics.fixWriteDuration()
 
-	err = gob.NewDecoder(bufio.NewReaderSize(conn, c.stg.Limiter.body)).
-		Decode(&msg)
+	err = gob.NewDecoder(bufio.NewReaderSize(conn, c.stg.Limiter.body)).Decode(&cm)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	msg, err = cm.Decode(c.rsa.PrivateKey())
 	if err != nil {
 		c.stg.Logger.Error(err.Error())
 
@@ -103,6 +136,8 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 
 	if msg.Error != nil {
 		err = msg.Error
+
+		c.stg.Logger.Error(err.Error())
 
 		return
 	}

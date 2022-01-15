@@ -10,8 +10,9 @@ import (
 )
 
 type Server struct {
-	tcp TCP
-	stg ServerSettings
+	tcp *TCP
+	rsa *RSA
+	stg *ServerSettings
 
 	mx       sync.RWMutex
 	handlers map[string]Handler
@@ -19,9 +20,10 @@ type Server struct {
 	ctx context.Context
 }
 
-func NewServer(tcp TCP, stg ServerSettings) (s *Server) {
+func NewServer(tcp *TCP, rsa *RSA, stg *ServerSettings) (s *Server) {
 	return &Server{
 		tcp: tcp,
+		rsa: rsa,
 		stg: stg,
 
 		mx:       sync.RWMutex{},
@@ -83,9 +85,34 @@ func (s *Server) Serve() (err error) {
 
 			metrics := newMetrics(conn.RemoteAddr().String())
 
+			// RSA handshake
+			var pk PublicKey
+			err = gob.NewDecoder(conn).Decode(&pk)
+			if err != nil {
+				s.stg.Logger.Error(err.Error())
+
+				return
+			}
+
+			err = gob.NewEncoder(conn).Encode(s.rsa.PublicKey())
+			if err != nil {
+				s.stg.Logger.Error(err.Error())
+
+				return
+			}
+
+			metrics.fixHandshake()
+
+			var cm CryptMessage
+			err = gob.NewDecoder(bufio.NewReaderSize(conn, stg.Limiter.body)).Decode(&cm)
+			if err != nil {
+				stg.Logger.Error(err.Error())
+
+				return
+			}
+
 			var msg Message
-			err = gob.NewDecoder(bufio.NewReaderSize(conn, stg.Limiter.body)).
-				Decode(&msg)
+			msg, err = cm.Decode(s.rsa.PrivateKey())
 			if err != nil {
 				stg.Logger.Error(err.Error())
 
@@ -123,8 +150,14 @@ func (s *Server) Serve() (err error) {
 
 			metrics.fixHandleDuration()
 
-			err = gob.NewEncoder(conn).
-				Encode(msg)
+			cm, err = msg.Encode(pk)
+			if err != nil {
+				stg.Logger.Error(err.Error())
+
+				return
+			}
+
+			err = gob.NewEncoder(conn).Encode(cm)
 			if err != nil {
 				stg.Logger.Error(err.Error())
 
@@ -134,6 +167,6 @@ func (s *Server) Serve() (err error) {
 			metrics.fixWriteDuration()
 
 			stg.Logger.Info(metrics.string())
-		}(conn, s.stg)
+		}(conn, *s.stg)
 	}
 }

@@ -12,9 +12,10 @@ type Metrics struct {
 
 	tm time.Time
 
-	read   time.Duration
-	handle time.Duration
-	write  time.Duration
+	handshake time.Duration
+	read      time.Duration
+	handle    time.Duration
+	write     time.Duration
 
 	stat []string
 }
@@ -24,9 +25,10 @@ func newMetrics(addr string) (m *Metrics) {
 		addr: addr,
 		tm:   time.Now(),
 
-		read:   -1,
-		handle: -1,
-		write:  -1,
+		handshake: -1,
+		read:      -1,
+		handle:    -1,
+		write:     -1,
 
 		stat: []string{fmt.Sprintf("addr (%s)", addr)},
 	}
@@ -41,6 +43,12 @@ func (m *Metrics) setTopic(topic string) {
 }
 
 const statPattern = "%s (%s)"
+
+func (m *Metrics) fixHandshake() {
+	m.handshake = time.Since(m.tm)
+	m.stat = append(m.stat, fmt.Sprintf(statPattern, "handshake", prepareValue(m.handshake)))
+	m.reset()
+}
 
 func (m *Metrics) fixReadDuration() {
 	m.read = time.Since(m.tm)
@@ -62,6 +70,10 @@ func (m *Metrics) fixWriteDuration() {
 
 func (m *Metrics) string() (line string) {
 	var total time.Duration
+
+	if m.handshake >= 0 {
+		total += m.handshake
+	}
 
 	if m.read >= 0 {
 		total += m.read

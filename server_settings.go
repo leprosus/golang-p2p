@@ -7,8 +7,8 @@ type ServerSettings struct {
 	Logger
 }
 
-func NewServerSettings() (stg ServerSettings) {
-	return ServerSettings{
+func NewServerSettings() (stg *ServerSettings) {
+	return &ServerSettings{
 		Logger: NewStdLogger(),
 		Limiter: Limiter{
 			Timeout: Timeout{

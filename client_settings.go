@@ -8,8 +8,8 @@ type ClientSettings struct {
 	Logger
 }
 
-func NewClientSettings() (stg ClientSettings) {
-	return ClientSettings{
+func NewClientSettings() (stg *ClientSettings) {
+	return &ClientSettings{
 		Logger: NewStdLogger(),
 		Limiter: Limiter{
 			Timeout: Timeout{
