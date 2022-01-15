@@ -190,9 +190,9 @@ If you want to reassign this logger you need to implement your own with the foll
 
 ```go
 type Logger interface {
-Info(msg string)
-Warn(msg string)
-Error(msg string)
+    Info(msg string)
+    Warn(msg string)
+    Error(msg string)
 }
 ```
 
