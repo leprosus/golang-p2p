@@ -71,99 +71,103 @@ func (s *Server) Serve() (err error) {
 			return
 		}
 
-		go func(conn net.Conn, stg ServerSettings) {
-			defer func() {
-				err = conn.Close()
-				if err != nil {
-					stg.Logger.Error(err.Error())
-				}
-			}()
-
-			err := conn.SetDeadline(time.Now().Add(s.stg.Timeout.conn))
-			if err != nil {
-				s.stg.Logger.Warn(err.Error())
-
-				return
-			}
-
-			metrics := newMetrics(conn.RemoteAddr().String())
-
-			var ck CipherKey
-			ck, err = s.doHandshake(conn)
-			if err != nil {
-				s.stg.Logger.Error(err.Error())
-
-				return
-			}
-
-			metrics.fixHandshake()
-
-			var cm CryptMessage
-			err = gob.NewDecoder(bufio.NewReaderSize(conn, stg.Limiter.body)).Decode(&cm)
-			if err != nil {
-				stg.Logger.Error(err.Error())
-
-				return
-			}
-
-			var msg Message
-			msg, err = cm.Decode(ck)
-			if err != nil {
-				stg.Logger.Error(err.Error())
-
-				return
-			}
-
-			metrics.setTopic(msg.Topic)
-			metrics.fixReadDuration()
-
-			s.mx.RLock()
-			ctx := s.ctx
-			handler, ok := s.handlers[msg.Topic]
-			s.mx.RUnlock()
-			if !ok {
-				stg.Logger.Warn(UnsupportedTopic.Error())
-
-				return
-			}
-
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, stg.Timeout.handle)
-			defer cancel()
-
-			var (
-				req = Request{bs: msg.Content}
-				res Response
-			)
-			res, err = handler(ctx, req)
-			if err != nil {
-				stg.Logger.Error(err.Error())
-			}
-
-			msg.Content = res.bs
-			msg.Error = err
-
-			metrics.fixHandleDuration()
-
-			cm, err = msg.Encode(ck)
-			if err != nil {
-				stg.Logger.Error(err.Error())
-
-				return
-			}
-
-			err = gob.NewEncoder(conn).Encode(cm)
-			if err != nil {
-				stg.Logger.Error(err.Error())
-
-				return
-			}
-
-			metrics.fixWriteDuration()
-
-			stg.Logger.Info(metrics.string())
-		}(conn, *s.stg)
+		go s.processConn(conn, *s.stg)
 	}
+}
+
+func (s *Server) processConn(conn net.Conn, stg ServerSettings) {
+	var err error
+
+	defer func() {
+		err = conn.Close()
+		if err != nil {
+			stg.Logger.Error(err.Error())
+		}
+	}()
+
+	err = conn.SetDeadline(time.Now().Add(s.stg.Timeout.conn))
+	if err != nil {
+		s.stg.Logger.Warn(err.Error())
+
+		return
+	}
+
+	metrics := newMetrics(conn.RemoteAddr().String())
+
+	var ck CipherKey
+	ck, err = s.doHandshake(conn)
+	if err != nil {
+		s.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	metrics.fixHandshake()
+
+	var cm CryptMessage
+	err = gob.NewDecoder(bufio.NewReaderSize(conn, stg.Limiter.body)).Decode(&cm)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	var msg Message
+	msg, err = cm.Decode(ck)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	metrics.setTopic(msg.Topic)
+	metrics.fixReadDuration()
+
+	s.mx.RLock()
+	ctx := s.ctx
+	handler, ok := s.handlers[msg.Topic]
+	s.mx.RUnlock()
+	if !ok {
+		stg.Logger.Warn(UnsupportedTopic.Error())
+
+		return
+	}
+
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, stg.Timeout.handle)
+	defer cancel()
+
+	var (
+		req = Request{bs: msg.Content}
+		res Response
+	)
+	res, err = handler(ctx, req)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+	}
+
+	msg.Content = res.bs
+	msg.Error = err
+
+	metrics.fixHandleDuration()
+
+	cm, err = msg.Encode(ck)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	err = gob.NewEncoder(conn).Encode(cm)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	metrics.fixWriteDuration()
+
+	stg.Logger.Info(metrics.string())
 }
 
 func (s *Server) doHandshake(conn net.Conn) (ck CipherKey, err error) {
