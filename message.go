@@ -13,7 +13,7 @@ type Message struct {
 
 type CryptMessage []byte
 
-func (msg Message) Encode(pk PublicKey) (cm CryptMessage, err error) {
+func (msg Message) Encode(ck CipherKey) (cm CryptMessage, err error) {
 	var buf bytes.Buffer
 
 	err = gob.NewEncoder(&buf).Encode(msg)
@@ -21,14 +21,14 @@ func (msg Message) Encode(pk PublicKey) (cm CryptMessage, err error) {
 		return
 	}
 
-	cm, err = pk.Encode(buf.Bytes())
+	cm, err = ck.Encode(buf.Bytes())
 
 	return
 }
 
-func (cm CryptMessage) Decode(pk PrivateKey) (msg Message, err error) {
+func (cm CryptMessage) Decode(ck CipherKey) (msg Message, err error) {
 	var bs []byte
-	bs, err = pk.Decode(cm)
+	bs, err = ck.Decode(cm)
 	if err != nil {
 		return
 	}

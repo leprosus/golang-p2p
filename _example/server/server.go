@@ -19,14 +19,12 @@ type Buy struct {
 func main() {
 	tcp := p2p.NewTCP("localhost", 8080)
 
-	rsa, err := p2p.NewRSA()
+	settings := p2p.NewServerSettings()
+
+	server, err := p2p.NewServer(tcp, settings)
 	if err != nil {
 		log.Panicln(err)
 	}
-
-	settings := p2p.NewServerSettings()
-
-	server := p2p.NewServer(tcp, rsa, settings)
 
 	server.SetHandle("dialog", func(ctx context.Context, req p2p.Request) (res p2p.Response, err error) {
 		hello := Hello{}

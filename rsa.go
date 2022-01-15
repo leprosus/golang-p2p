@@ -1,10 +1,9 @@
 package p2p
 
 import (
-	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
+	"crypto/sha512"
 )
 
 type RSA struct {
@@ -39,8 +38,8 @@ type PublicKey struct {
 	Key rsa.PublicKey
 }
 
-func (pk PublicKey) Encode(bs []byte) (rs []byte, err error) {
-	rs, err = rsa.EncryptOAEP(sha256.New(), rand.Reader, &pk.Key, bs, nil)
+func (pk PublicKey) Encode(ck CipherKey) (cck CryptCipherKey, err error) {
+	cck, err = rsa.EncryptOAEP(sha512.New(), rand.Reader, &pk.Key, ck, nil)
 
 	return
 }
@@ -49,8 +48,8 @@ type PrivateKey struct {
 	key rsa.PrivateKey
 }
 
-func (pk PrivateKey) Decode(bs []byte) (rs []byte, err error) {
-	rs, err = pk.key.Decrypt(nil, bs, &rsa.OAEPOptions{Hash: crypto.SHA256})
+func (pk PrivateKey) Decode(cck CryptCipherKey) (ck CipherKey, err error) {
+	ck, err = rsa.DecryptOAEP(sha512.New(), rand.Reader, &pk.key, cck, nil)
 
 	return
 }

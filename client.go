@@ -16,14 +16,17 @@ type Client struct {
 	mx sync.RWMutex
 }
 
-func NewClient(tcp *TCP, rsa *RSA, stg *ClientSettings) (c *Client) {
-	return &Client{
+func NewClient(tcp *TCP, stg *ClientSettings) (c *Client, err error) {
+	c = &Client{
 		tcp: tcp,
-		rsa: rsa,
 		stg: stg,
 
 		mx: sync.RWMutex{},
 	}
+
+	c.rsa, err = NewRSA()
+
+	return
 }
 
 func (c *Client) Send(topic string, req Request) (res Response, err error) {
@@ -76,17 +79,10 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 	}
 
 	metrics := newMetrics(conn.RemoteAddr().String())
+	metrics.setTopic(topic)
 
-	// RSA handshake
-	err = gob.NewEncoder(conn).Encode(c.rsa.PublicKey())
-	if err != nil {
-		c.stg.Logger.Error(err.Error())
-
-		return
-	}
-
-	var pk PublicKey
-	err = gob.NewDecoder(conn).Decode(&pk)
+	var ck CipherKey
+	ck, err = c.doHandshake(conn)
 	if err != nil {
 		c.stg.Logger.Error(err.Error())
 
@@ -94,7 +90,6 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 	}
 
 	metrics.fixHandshake()
-	metrics.setTopic(topic)
 
 	msg := Message{
 		Topic:   topic,
@@ -102,7 +97,7 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 	}
 
 	var cm CryptMessage
-	cm, err = msg.Encode(pk)
+	cm, err = msg.Encode(ck)
 	if err != nil {
 		c.stg.Logger.Error(err.Error())
 
@@ -125,7 +120,7 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 		return
 	}
 
-	msg, err = cm.Decode(c.rsa.PrivateKey())
+	msg, err = cm.Decode(ck)
 	if err != nil {
 		c.stg.Logger.Error(err.Error())
 
@@ -145,6 +140,23 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 	c.stg.Logger.Info(metrics.string())
 
 	res.bs = msg.Content
+
+	return
+}
+
+func (c *Client) doHandshake(conn net.Conn) (ck CipherKey, err error) {
+	err = gob.NewEncoder(conn).Encode(c.rsa.PublicKey())
+	if err != nil {
+		return
+	}
+
+	var cck CryptCipherKey
+	err = gob.NewDecoder(conn).Decode(&cck)
+	if err != nil {
+		return
+	}
+
+	ck, err = c.rsa.PrivateKey().Decode(cck)
 
 	return
 }

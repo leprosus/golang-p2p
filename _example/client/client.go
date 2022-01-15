@@ -18,14 +18,12 @@ type Buy struct {
 func main() {
 	tcp := p2p.NewTCP("localhost", 8080)
 
-	rsa, err := p2p.NewRSA()
+	settings := p2p.NewClientSettings()
+
+	client, err := p2p.NewClient(tcp, settings)
 	if err != nil {
 		log.Panicln(err)
 	}
-
-	settings := p2p.NewClientSettings()
-
-	client := p2p.NewClient(tcp, rsa, settings)
 
 	for i := 0; i < 10; i++ {
 		hello := Hello{Text: fmt.Sprintf("User #%d", i+1)}

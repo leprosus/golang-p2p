@@ -20,10 +20,9 @@ type Server struct {
 	ctx context.Context
 }
 
-func NewServer(tcp *TCP, rsa *RSA, stg *ServerSettings) (s *Server) {
-	return &Server{
+func NewServer(tcp *TCP, stg *ServerSettings) (s *Server, err error) {
+	s = &Server{
 		tcp: tcp,
-		rsa: rsa,
 		stg: stg,
 
 		mx:       sync.RWMutex{},
@@ -31,6 +30,10 @@ func NewServer(tcp *TCP, rsa *RSA, stg *ServerSettings) (s *Server) {
 
 		ctx: context.Background(),
 	}
+
+	s.rsa, err = NewRSA()
+
+	return
 }
 
 func (s *Server) SetContext(ctx context.Context) {
@@ -85,16 +88,8 @@ func (s *Server) Serve() (err error) {
 
 			metrics := newMetrics(conn.RemoteAddr().String())
 
-			// RSA handshake
-			var pk PublicKey
-			err = gob.NewDecoder(conn).Decode(&pk)
-			if err != nil {
-				s.stg.Logger.Error(err.Error())
-
-				return
-			}
-
-			err = gob.NewEncoder(conn).Encode(s.rsa.PublicKey())
+			var ck CipherKey
+			ck, err = s.doHandshake(conn)
 			if err != nil {
 				s.stg.Logger.Error(err.Error())
 
@@ -112,7 +107,7 @@ func (s *Server) Serve() (err error) {
 			}
 
 			var msg Message
-			msg, err = cm.Decode(s.rsa.PrivateKey())
+			msg, err = cm.Decode(ck)
 			if err != nil {
 				stg.Logger.Error(err.Error())
 
@@ -150,7 +145,7 @@ func (s *Server) Serve() (err error) {
 
 			metrics.fixHandleDuration()
 
-			cm, err = msg.Encode(pk)
+			cm, err = msg.Encode(ck)
 			if err != nil {
 				stg.Logger.Error(err.Error())
 
@@ -169,4 +164,27 @@ func (s *Server) Serve() (err error) {
 			stg.Logger.Info(metrics.string())
 		}(conn, *s.stg)
 	}
+}
+
+func (s *Server) doHandshake(conn net.Conn) (ck CipherKey, err error) {
+	var pk PublicKey
+	err = gob.NewDecoder(conn).Decode(&pk)
+	if err != nil {
+		return
+	}
+
+	ck, err = NewCipherKey()
+	if err != nil {
+		return
+	}
+
+	var cck CryptCipherKey
+	cck, err = pk.Encode(ck)
+	if err != nil {
+		return
+	}
+
+	err = gob.NewEncoder(conn).Encode(cck)
+
+	return
 }

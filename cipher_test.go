@@ -1,25 +1,27 @@
 package p2p
 
-import "testing"
+import (
+	"testing"
+)
 
-func TestRSA(t *testing.T) {
+func TestCipher(t *testing.T) {
 	origin := []byte("a special secret message")
 
-	rsa, err := NewRSA()
+	ck, err := NewCipherKey()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal(err.Error())
 	}
 
 	var encoded []byte
-	encoded, err = rsa.PublicKey().Encode(origin)
+	encoded, err = ck.Encode(origin)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal(err.Error())
 	}
 
 	var decoded []byte
-	decoded, err = rsa.PrivateKey().Decode(encoded)
+	decoded, err = ck.Decode(encoded)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal(err.Error())
 	}
 
 	if string(origin) != string(decoded) {

@@ -6,10 +6,10 @@ Main aim the package is to create an easy way of microservices communication.
 
 ## Features
 
-| Feature                     | Description                                                                                                                                |
-|-----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| Gob, Json and Bytes support | You can send you structure or data in binary presentation or binary serialized                                                             |
-| RSA  encryption             | Every communication between a client and a server start with RSA public keys handshake.<br/>All sending data are encrypted before sending. |
+| Feature                     | Description                                                                                                                                 |
+|-----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| Gob, Json and Bytes support | You can send you structure or data in binary presentation or binary serialized                                                              |
+| RSA  handshake              | Every communication between a client and a server starts with RSA public keys handshake.<br/>All sending data are encrypted before sending. |
 
 ## Import
 
@@ -41,14 +41,12 @@ type Buy struct {
 func main() {
 	tcp := p2p.NewTCP("localhost", 8080)
 
-	rsa, err := p2p.NewRSA()
+	settings := p2p.NewServerSettings()
+
+	server, err := p2p.NewServer(tcp, settings)
 	if err != nil {
 		log.Panicln(err)
 	}
-
-	settings := p2p.NewServerSettings()
-
-	server := p2p.NewServer(tcp, rsa, settings)
 
 	server.SetHandle("dialog", func(ctx context.Context, req p2p.Request) (res p2p.Response, err error) {
 		hello := Hello{}
@@ -95,14 +93,12 @@ type Buy struct {
 func main() {
 	tcp := p2p.NewTCP("localhost", 8080)
 
-	rsa, err := p2p.NewRSA()
+	settings := p2p.NewClientSettings()
+
+	client, err := p2p.NewClient(tcp, settings)
 	if err != nil {
 		log.Panicln(err)
 	}
-
-	settings := p2p.NewClientSettings()
-
-	client := p2p.NewClient(tcp, rsa, settings)
 
 	for i := 0; i < 10; i++ {
 		hello := Hello{Text: fmt.Sprintf("User #%d", i+1)}
@@ -138,48 +134,49 @@ If you run the server and the client separately then you see:
 
 ```text
 > Hello: User #1
-dialog: addr (127.0.0.1:57573), handshake (740 µs), read (4 ms), handle (104 µs), write (181 µs), total (5 ms)
+dialog: addr (127.0.0.1:61620), handshake (511 µs), read (2 ms), handle (129 µs), write (62 µs), total (3 ms)
 > Hello: User #2
-dialog: addr (127.0.0.1:57574), handshake (267 µs), read (2 ms), handle (64 µs), write (153 µs), total (3 ms)
+dialog: addr (127.0.0.1:61621), handshake (310 µs), read (2 ms), handle (60 µs), write (30 µs), total (3 ms)
 > Hello: User #3
-dialog: addr (127.0.0.1:57575), handshake (212 µs), read (2 ms), handle (50 µs), write (106 µs), total (3 ms)
+dialog: addr (127.0.0.1:61623), handshake (220 µs), read (2 ms), handle (68 µs), write (26 µs), total (3 ms)
 > Hello: User #4
-dialog: addr (127.0.0.1:57576), handshake (215 µs), read (2 ms), handle (58 µs), write (132 µs), total (3 ms)
+dialog: addr (127.0.0.1:61624), handshake (252 µs), read (2 ms), handle (79 µs), write (30 µs), total (3 ms)
 > Hello: User #5
-dialog: addr (127.0.0.1:57577), handshake (192 µs), read (2 ms), handle (55 µs), write (120 µs), total (3 ms)
+dialog: addr (127.0.0.1:61625), handshake (340 µs), read (2 ms), handle (75 µs), write (41 µs), total (3 ms)
 > Hello: User #6
-dialog: addr (127.0.0.1:57578), handshake (295 µs), read (2 ms), handle (101 µs), write (144 µs), total (3 ms)
+dialog: addr (127.0.0.1:61626), handshake (276 µs), read (2 ms), handle (57 µs), write (34 µs), total (3 ms)
 > Hello: User #7
-dialog: addr (127.0.0.1:57579), handshake (256 µs), read (2 ms), handle (193 µs), write (273 µs), total (3 ms)
+dialog: addr (127.0.0.1:61627), handshake (251 µs), read (3 ms), handle (163 µs), write (65 µs), total (3 ms)
 > Hello: User #8
-dialog: addr (127.0.0.1:57580), handshake (396 µs), read (2 ms), handle (75 µs), write (176 µs), total (3 ms)
+dialog: addr (127.0.0.1:61628), handshake (268 µs), read (2 ms), handle (89 µs), write (50 µs), total (3 ms)
 > Hello: User #9
-dialog: addr (127.0.0.1:57581), handshake (423 µs), read (2 ms), handle (77 µs), write (148 µs), total (3 ms)
+dialog: addr (127.0.0.1:61629), handshake (413 µs), read (3 ms), handle (229 µs), write (85 µs), total (4 ms)
 > Hello: User #10
-dialog: addr (127.0.0.1:57582), handshake (335 µs), read (3 ms), handle (202 µs), write (296 µs), total (3 ms)
+dialog: addr (127.0.0.1:61630), handshake (663 µs), read (3 ms), handle (88 µs), write (73 µs), total (4 ms)
 ```
 
 * in the client stdout:
 
 ```text
+dialog: addr (127.0.0.1:8080), handshake (3 ms), write (90 µs), read (630 µs), total (3 ms)
 > Buy: User #1
-dialog: addr (127.0.0.1:8080), handshake (294 µs), write (141 µs), read (5 ms), total (5 ms)
+dialog: addr (127.0.0.1:8080), handshake (2 ms), write (34 µs), read (476 µs), total (3 ms)
 > Buy: User #2
-dialog: addr (127.0.0.1:8080), handshake (319 µs), write (138 µs), read (5 ms), total (5 ms)
+dialog: addr (127.0.0.1:8080), handshake (2 ms), write (33 µs), read (331 µs), total (3 ms)
 > Buy: User #3
-dialog: addr (127.0.0.1:8080), handshake (301 µs), write (119 µs), read (5 ms), total (5 ms)
+dialog: addr (127.0.0.1:8080), handshake (2 ms), write (43 µs), read (369 µs), total (3 ms)
 > Buy: User #4
-dialog: addr (127.0.0.1:8080), handshake (289 µs), write (115 µs), read (5 ms), total (6 ms)
+dialog: addr (127.0.0.1:8080), handshake (2 ms), write (60 µs), read (415 µs), total (3 ms)
 > Buy: User #5
-dialog: addr (127.0.0.1:8080), handshake (313 µs), write (125 µs), read (5 ms), total (5 ms)
+dialog: addr (127.0.0.1:8080), handshake (2 ms), write (48 µs), read (374 µs), total (3 ms)
 > Buy: User #6
-dialog: addr (127.0.0.1:8080), handshake (673 µs), write (158 µs), read (5 ms), total (6 ms)
+dialog: addr (127.0.0.1:8080), handshake (2 ms), write (115 µs), read (800 µs), total (3 ms)
 > Buy: User #7
-dialog: addr (127.0.0.1:8080), handshake (313 µs), write (129 µs), read (5 ms), total (6 ms)
+dialog: addr (127.0.0.1:8080), handshake (2 ms), write (54 µs), read (560 µs), total (3 ms)
 > Buy: User #8
-dialog: addr (127.0.0.1:8080), handshake (686 µs), write (229 µs), read (5 ms), total (6 ms)
+dialog: addr (127.0.0.1:8080), handshake (3 ms), write (198 µs), read (992 µs), total (4 ms)
 > Buy: User #9
-dialog: addr (127.0.0.1:8080), handshake (405 µs), write (122 µs), read (5 ms), total (6 ms)
+dialog: addr (127.0.0.1:8080), handshake (3 ms), write (53 µs), read (502 µs), total (4 ms)
 > Buy: User #10
 ```
 
@@ -211,10 +208,6 @@ settings.SetLogger(yourLogger)
 
 * p2p.NewTCP(host, port) (tcp, err) - creates TCP connection
 
-### RSA Initialization
-
-* p2p.NewRSA() (rsa, err) - creates RSA private/public keys
-
 ### Server settings initialization
 
 * p2p.NewServerSettings() (stg) - creates a new server's settings
@@ -225,7 +218,7 @@ settings.SetLogger(yourLogger)
 
 ### Server
 
-* p2p.NewServer(tcp, rsa, stg) - creates a new server
+* p2p.NewServer(tcp, stg) (srv, err) - creates a new server
 * srv.SetContext(ctx) - sets context
 * srv.SetHandle(topic, handler) - sets a handler that processes all request with defined topic
 * srv.Serve() (err) - starts to serve
@@ -240,7 +233,7 @@ settings.SetLogger(yourLogger)
 
 ### Client
 
-* NewClient(tcp, rsa, stg) (clt) - creates a new client
+* NewClient(tcp, stg) (clt, err) - creates a new client
 * clt.Send(topic, req) (res, err) - sends a request to a server by the topic
 
 ### Request
