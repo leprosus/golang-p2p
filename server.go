@@ -11,6 +11,8 @@ type Server struct {
 	rsa *RSA
 	stg *ServerSettings
 
+	ctx context.Context
+
 	mx       sync.RWMutex
 	handlers map[string]Handler
 }
@@ -28,6 +30,8 @@ func NewServer(tcp *TCP, stg *ServerSettings) (s *Server, err error) {
 		tcp: tcp,
 		stg: stg,
 
+		ctx: context.Background(),
+
 		mx:       sync.RWMutex{},
 		handlers: map[string]Handler{},
 	}
@@ -40,6 +44,12 @@ func NewServer(tcp *TCP, stg *ServerSettings) (s *Server, err error) {
 func (s *Server) SetHandle(topic string, handler Handler) {
 	s.mx.Lock()
 	s.handlers[topic] = handler
+	s.mx.Unlock()
+}
+
+func (s *Server) SetContext(ctx context.Context) {
+	s.mx.Lock()
+	s.ctx = ctx
 	s.mx.Unlock()
 }
 
