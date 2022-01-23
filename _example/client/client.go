@@ -16,7 +16,7 @@ type Buy struct {
 }
 
 func main() {
-	tcp := p2p.NewTCP("localhost", 8080)
+	tcp := p2p.NewTCP("localhost", "8080")
 
 	settings := p2p.NewClientSettings()
 
