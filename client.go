@@ -1,8 +1,6 @@
 package p2p
 
 import (
-	"bufio"
-	"encoding/gob"
 	"net"
 	"sync"
 	"time"
@@ -29,7 +27,7 @@ func NewClient(tcp *TCP, stg *ClientSettings) (c *Client, err error) {
 	return
 }
 
-func (c *Client) Send(topic string, req Request) (res Response, err error) {
+func (c *Client) Send(topic string, req Binary) (res Binary, err error) {
 	var retries = c.stg.retries
 	for retries > 0 {
 		c.mx.RLock()
@@ -51,7 +49,7 @@ func (c *Client) Send(topic string, req Request) (res Response, err error) {
 	return
 }
 
-func (c *Client) try(topic string, req Request) (res Response, err error) {
+func (c *Client) try(topic string, req Binary) (res Binary, err error) {
 	var conn net.Conn
 	conn, err = net.Dial("tcp", c.tcp.addr)
 	if err != nil {
@@ -69,11 +67,10 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 		}
 	}()
 
-	err = conn.SetDeadline(time.Now().Add(c.stg.Timeout.conn))
+	var wrapped Conn
+	wrapped, err = NewConn(conn, c.stg.Limiter)
 	if err != nil {
 		c.stg.Logger.Error(err.Error())
-
-		err = PresetConnectionError
 
 		return
 	}
@@ -81,8 +78,75 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 	metrics := newMetrics(conn.RemoteAddr().String())
 	metrics.setTopic(topic)
 
-	var ck CipherKey
-	ck, err = c.doHandshake(conn)
+	if c.tcp.cipherKey == nil {
+		var ck CipherKey
+		ck, err = c.doHandshake(wrapped, metrics)
+		if err != nil {
+			return
+		}
+
+		c.tcp.cipherKey = &ck
+	} else {
+		err = c.doResume(wrapped, metrics)
+		if err != nil {
+			c.tcp.cipherKey = nil
+
+			return
+		}
+	}
+
+	msg := Message{
+		Topic:   topic,
+		Content: req.GetBytes(),
+	}
+	msg, err = c.doExchange(wrapped, metrics, msg)
+	if err != nil {
+		return
+	}
+
+	res = &Data{}
+	res.SetBytes(msg.Content)
+
+	c.stg.Logger.Info(metrics.string())
+
+	return
+}
+
+func (c *Client) doHandshake(conn Conn, metrics *Metrics) (ck CipherKey, err error) {
+	p := Package{
+		Type: Handshake,
+	}
+
+	err = p.SetGob(c.rsa.PublicKey())
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	err = conn.WritePackage(p)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	err = conn.ReadPackage(&p)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	var cck CryptCipherKey
+	err = p.GetGob(&cck)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	ck, err = c.rsa.PrivateKey().Decode(cck)
 	if err != nil {
 		c.stg.Logger.Error(err.Error())
 
@@ -91,20 +155,79 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 
 	metrics.fixHandshake()
 
-	msg := Message{
-		Topic:   topic,
-		Content: req.bs,
+	return
+}
+
+func (c *Client) doResume(conn Conn, metrics *Metrics) (err error) {
+	p := Package{
+		Type: Resume,
 	}
 
-	var cm CryptMessage
-	cm, err = msg.Encode(ck)
+	var bs []byte
+	bs, err = c.tcp.cipherKey.Encode([]byte(metrics.topic))
 	if err != nil {
 		c.stg.Logger.Error(err.Error())
 
 		return
 	}
 
-	err = gob.NewEncoder(conn).Encode(cm)
+	p.SetBytes(bs)
+
+	err = conn.WritePackage(p)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	err = conn.ReadPackage(&p)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	var rs ResumeStatus
+	err = p.GetGob(&rs)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	if rs == ResumeImpossible {
+		err = CipherKeyError
+
+		c.stg.Logger.Warn(err.Error())
+
+		return
+	}
+
+	metrics.fixResume()
+
+	return
+}
+
+func (c *Client) doExchange(conn Conn, metrics *Metrics, in Message) (out Message, err error) {
+	var cm CryptMessage
+	cm, err = in.Encode(*c.tcp.cipherKey)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	p := Package{
+		Type: Exchange,
+	}
+	err = p.SetGob(cm)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	err = conn.WritePackage(p)
 	if err != nil {
 		c.stg.Logger.Error(err.Error())
 
@@ -113,14 +236,21 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 
 	metrics.fixWriteDuration()
 
-	err = gob.NewDecoder(bufio.NewReaderSize(conn, c.stg.Limiter.body)).Decode(&cm)
+	err = conn.ReadPackage(&p)
 	if err != nil {
 		c.stg.Logger.Error(err.Error())
 
 		return
 	}
 
-	msg, err = cm.Decode(ck)
+	err = p.GetGob(&cm)
+	if err != nil {
+		c.stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	out, err = cm.Decode(*c.tcp.cipherKey)
 	if err != nil {
 		c.stg.Logger.Error(err.Error())
 
@@ -129,34 +259,13 @@ func (c *Client) try(topic string, req Request) (res Response, err error) {
 
 	metrics.fixReadDuration()
 
-	if msg.Error != nil {
-		err = msg.Error
+	if out.Error != nil {
+		err = out.Error
 
 		c.stg.Logger.Error(err.Error())
 
 		return
 	}
-
-	c.stg.Logger.Info(metrics.string())
-
-	res.bs = msg.Content
-
-	return
-}
-
-func (c *Client) doHandshake(conn net.Conn) (ck CipherKey, err error) {
-	err = gob.NewEncoder(conn).Encode(c.rsa.PublicKey())
-	if err != nil {
-		return
-	}
-
-	var cck CryptCipherKey
-	err = gob.NewDecoder(conn).Decode(&cck)
-	if err != nil {
-		return
-	}
-
-	ck, err = c.rsa.PrivateKey().Decode(cck)
 
 	return
 }

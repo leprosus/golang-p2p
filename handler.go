@@ -4,4 +4,4 @@ import "context"
 
 type HandlerType uint
 
-type Handler func(ctx context.Context, req Request) (res Response, err error)
+type Handler func(ctx context.Context, req Binary) (res Binary, err error)

@@ -1,13 +1,17 @@
 package p2p
 
-import "fmt"
+import (
+	"fmt"
+	"net"
+)
 
 type TCP struct {
-	addr string
+	addr      string
+	cipherKey *CipherKey
 }
 
 func NewTCP(host string, port uint) (tcp *TCP) {
 	return &TCP{
-		addr: fmt.Sprintf("%s:%d", host, port),
+		addr: net.JoinHostPort(host, fmt.Sprint(port)),
 	}
 }

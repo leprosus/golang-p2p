@@ -26,7 +26,7 @@ func main() {
 		log.Panicln(err)
 	}
 
-	server.SetHandle("dialog", func(ctx context.Context, req p2p.Request) (res p2p.Response, err error) {
+	server.SetHandle("dialog", func(ctx context.Context, req p2p.Binary) (res p2p.Binary, err error) {
 		hello := Hello{}
 		err = req.GetGob(&hello)
 		if err != nil {
@@ -35,8 +35,10 @@ func main() {
 
 		fmt.Printf("> Hello: %s\n", hello.Text)
 
-		buy := Buy{Text: hello.Text}
-		err = res.SetGob(buy)
+		res = &p2p.Data{}
+		err = res.SetGob(Buy{
+			Text: hello.Text,
+		})
 
 		return
 	})

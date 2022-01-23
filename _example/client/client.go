@@ -25,16 +25,19 @@ func main() {
 		log.Panicln(err)
 	}
 
-	for i := 0; i < 10; i++ {
-		hello := Hello{Text: fmt.Sprintf("User #%d", i+1)}
+	var req, res p2p.Binary
 
-		req := p2p.Request{}
-		err = req.SetGob(hello)
+	for i := 0; i < 10; i++ {
+		req = &p2p.Data{}
+
+		err = req.SetGob(Hello{
+			Text: fmt.Sprintf("User #%d", i+1),
+		})
 		if err != nil {
 			log.Panicln(err)
 		}
 
-		var res p2p.Response
+		res = &p2p.Data{}
 		res, err = client.Send("dialog", req)
 		if err != nil {
 			log.Panicln(err)

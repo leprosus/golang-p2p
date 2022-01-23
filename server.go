@@ -1,12 +1,9 @@
 package p2p
 
 import (
-	"bufio"
 	"context"
-	"encoding/gob"
 	"net"
 	"sync"
-	"time"
 )
 
 type Server struct {
@@ -16,30 +13,28 @@ type Server struct {
 
 	mx       sync.RWMutex
 	handlers map[string]Handler
-
-	ctx context.Context
 }
 
 func NewServer(tcp *TCP, stg *ServerSettings) (s *Server, err error) {
+	var ck CipherKey
+	ck, err = NewCipherKey()
+	if err != nil {
+		return
+	}
+
+	tcp.cipherKey = &ck
+
 	s = &Server{
 		tcp: tcp,
 		stg: stg,
 
 		mx:       sync.RWMutex{},
 		handlers: map[string]Handler{},
-
-		ctx: context.Background(),
 	}
 
 	s.rsa, err = NewRSA()
 
 	return
-}
-
-func (s *Server) SetContext(ctx context.Context) {
-	s.mx.Lock()
-	s.ctx = ctx
-	s.mx.Unlock()
 }
 
 func (s *Server) SetHandle(topic string, handler Handler) {
@@ -62,8 +57,11 @@ func (s *Server) Serve() (err error) {
 		}
 	}()
 
+	var (
+		conn    net.Conn
+		wrapped Conn
+	)
 	for {
-		var conn net.Conn
 		conn, err = listener.Accept()
 		if err != nil {
 			s.stg.Logger.Error(err.Error())
@@ -71,11 +69,18 @@ func (s *Server) Serve() (err error) {
 			return
 		}
 
-		go s.processConn(conn, *s.stg)
+		wrapped, err = NewConn(conn, s.stg.Limiter)
+		if err != nil {
+			s.stg.Logger.Error(err.Error())
+
+			return
+		}
+
+		go s.processConn(wrapped, *s.stg)
 	}
 }
 
-func (s *Server) processConn(conn net.Conn, stg ServerSettings) {
+func (s *Server) processConn(conn Conn, stg ServerSettings) {
 	var err error
 
 	defer func() {
@@ -85,27 +90,120 @@ func (s *Server) processConn(conn net.Conn, stg ServerSettings) {
 		}
 	}()
 
-	err = conn.SetDeadline(time.Now().Add(s.stg.Timeout.conn))
+	var p Package
+	err = conn.ReadPackage(&p)
 	if err != nil {
-		s.stg.Logger.Warn(err.Error())
+		stg.Logger.Error(err.Error())
 
 		return
 	}
 
 	metrics := newMetrics(conn.RemoteAddr().String())
 
-	var ck CipherKey
-	ck, err = s.doHandshake(conn)
+	switch p.Type {
+	case Handshake:
+		err = s.doHandshake(conn, p, stg, metrics)
+	case Resume:
+		err = s.doResume(conn, p, stg, metrics)
+	default:
+		err = UnsupportedPackage
+
+		stg.Logger.Error(err.Error())
+	}
 	if err != nil {
-		s.stg.Logger.Error(err.Error())
+		return
+	}
+
+	err = conn.ReadPackage(&p)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	if p.Type != Exchange {
+		err = UnexpectedPackage
+
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	err = s.doExchange(conn, p, stg, metrics)
+	if err != nil {
+		return
+	}
+
+	stg.Logger.Info(metrics.string())
+}
+
+func (s *Server) doHandshake(conn Conn, p Package, stg ServerSettings, metrics *Metrics) (err error) {
+	var pk PublicKey
+	err = p.GetGob(&pk)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	var cck CryptCipherKey
+	cck, err = pk.Encode(*s.tcp.cipherKey)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	err = p.SetGob(cck)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	err = conn.WritePackage(p)
+	if err != nil {
+		stg.Logger.Error(err.Error())
 
 		return
 	}
 
 	metrics.fixHandshake()
 
+	return
+}
+
+func (s *Server) doResume(conn Conn, p Package, stg ServerSettings, metrics *Metrics) (err error) {
+	var rs = ResumeImpossible
+
+	var bs = p.GetBytes()
+	_, err = s.tcp.cipherKey.Decode(bs)
+	if err == nil {
+		rs = ResumePossible
+	}
+
+	err = p.SetGob(rs)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	err = conn.WritePackage(p)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	metrics.fixResume()
+
+	return
+}
+
+func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *Metrics) (err error) {
 	var cm CryptMessage
-	err = gob.NewDecoder(bufio.NewReaderSize(conn, stg.Limiter.body)).Decode(&cm)
+	err = p.GetGob(&cm)
 	if err != nil {
 		stg.Logger.Error(err.Error())
 
@@ -113,7 +211,7 @@ func (s *Server) processConn(conn net.Conn, stg ServerSettings) {
 	}
 
 	var msg Message
-	msg, err = cm.Decode(ck)
+	msg, err = cm.Decode(*s.tcp.cipherKey)
 	if err != nil {
 		stg.Logger.Error(err.Error())
 
@@ -124,7 +222,6 @@ func (s *Server) processConn(conn net.Conn, stg ServerSettings) {
 	metrics.fixReadDuration()
 
 	s.mx.RLock()
-	ctx := s.ctx
 	handler, ok := s.handlers[msg.Topic]
 	s.mx.RUnlock()
 	if !ok {
@@ -133,32 +230,38 @@ func (s *Server) processConn(conn net.Conn, stg ServerSettings) {
 		return
 	}
 
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, stg.Timeout.handle)
+	ctx, cancel := context.WithTimeout(context.Background(), stg.Timeout.handle)
 	defer cancel()
 
-	var (
-		req = Request{bs: msg.Content}
-		res Response
-	)
+	var req, res Binary
+
+	req = &Data{}
+	req.SetBytes(msg.Content)
 	res, err = handler(ctx, req)
 	if err != nil {
 		stg.Logger.Error(err.Error())
 	}
 
-	msg.Content = res.bs
+	msg.Content = res.GetBytes()
 	msg.Error = err
 
 	metrics.fixHandleDuration()
 
-	cm, err = msg.Encode(ck)
+	cm, err = msg.Encode(*s.tcp.cipherKey)
 	if err != nil {
 		stg.Logger.Error(err.Error())
 
 		return
 	}
 
-	err = gob.NewEncoder(conn).Encode(cm)
+	err = p.SetGob(cm)
+	if err != nil {
+		stg.Logger.Error(err.Error())
+
+		return
+	}
+
+	err = conn.WritePackage(p)
 	if err != nil {
 		stg.Logger.Error(err.Error())
 
@@ -166,29 +269,6 @@ func (s *Server) processConn(conn net.Conn, stg ServerSettings) {
 	}
 
 	metrics.fixWriteDuration()
-
-	stg.Logger.Info(metrics.string())
-}
-
-func (s *Server) doHandshake(conn net.Conn) (ck CipherKey, err error) {
-	var pk PublicKey
-	err = gob.NewDecoder(conn).Decode(&pk)
-	if err != nil {
-		return
-	}
-
-	ck, err = NewCipherKey()
-	if err != nil {
-		return
-	}
-
-	var cck CryptCipherKey
-	cck, err = pk.Encode(ck)
-	if err != nil {
-		return
-	}
-
-	err = gob.NewEncoder(conn).Encode(cck)
 
 	return
 }

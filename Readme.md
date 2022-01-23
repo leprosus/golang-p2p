@@ -48,7 +48,7 @@ func main() {
 		log.Panicln(err)
 	}
 
-	server.SetHandle("dialog", func(ctx context.Context, req p2p.Request) (res p2p.Response, err error) {
+	server.SetHandle("dialog", func(ctx context.Context, req p2p.Binary) (res p2p.Binary, err error) {
 		hello := Hello{}
 		err = req.GetGob(&hello)
 		if err != nil {
@@ -57,8 +57,10 @@ func main() {
 
 		fmt.Printf("> Hello: %s\n", hello.Text)
 
-		buy := Buy{Text: hello.Text}
-		err = res.SetGob(buy)
+		res = &p2p.Data{}
+		err = res.SetGob(Buy{
+			Text: hello.Text,
+		})
 
 		return
 	})
@@ -100,16 +102,19 @@ func main() {
 		log.Panicln(err)
 	}
 
-	for i := 0; i < 10; i++ {
-		hello := Hello{Text: fmt.Sprintf("User #%d", i+1)}
+	var req, res p2p.Binary
 
-		req := p2p.Request{}
-		err = req.SetGob(hello)
+	for i := 0; i < 10; i++ {
+		req = &p2p.Data{}
+
+		err = req.SetGob(Hello{
+			Text: fmt.Sprintf("User #%d", i+1),
+		})
 		if err != nil {
 			log.Panicln(err)
 		}
 
-		var res p2p.Response
+		res = &p2p.Data{}
 		res, err = client.Send("dialog", req)
 		if err != nil {
 			log.Panicln(err)
@@ -134,49 +139,49 @@ If you run the server and the client separately then you see:
 
 ```text
 > Hello: User #1
-dialog: addr (127.0.0.1:61620), handshake (511 µs), read (2 ms), handle (129 µs), write (62 µs), total (3 ms)
+dialog: addr (127.0.0.1:54949), handshake (426 µs), read (4 ms), handle (240 µs), write (215 µs), total (5 ms)
 > Hello: User #2
-dialog: addr (127.0.0.1:61621), handshake (310 µs), read (2 ms), handle (60 µs), write (30 µs), total (3 ms)
+dialog: addr (127.0.0.1:54950), resume (85 µs), read (456 µs), handle (61 µs), write (65 µs), total (669 µs)
 > Hello: User #3
-dialog: addr (127.0.0.1:61623), handshake (220 µs), read (2 ms), handle (68 µs), write (26 µs), total (3 ms)
+dialog: addr (127.0.0.1:54951), resume (65 µs), read (409 µs), handle (71 µs), write (73 µs), total (619 µs)
 > Hello: User #4
-dialog: addr (127.0.0.1:61624), handshake (252 µs), read (2 ms), handle (79 µs), write (30 µs), total (3 ms)
+dialog: addr (127.0.0.1:54952), resume (58 µs), read (237 µs), handle (48 µs), write (56 µs), total (400 µs)
 > Hello: User #5
-dialog: addr (127.0.0.1:61625), handshake (340 µs), read (2 ms), handle (75 µs), write (41 µs), total (3 ms)
+dialog: addr (127.0.0.1:54953), resume (62 µs), read (209 µs), handle (45 µs), write (59 µs), total (377 µs)
 > Hello: User #6
-dialog: addr (127.0.0.1:61626), handshake (276 µs), read (2 ms), handle (57 µs), write (34 µs), total (3 ms)
+dialog: addr (127.0.0.1:54954), resume (51 µs), read (284 µs), handle (74 µs), write (59 µs), total (469 µs)
 > Hello: User #7
-dialog: addr (127.0.0.1:61627), handshake (251 µs), read (3 ms), handle (163 µs), write (65 µs), total (3 ms)
+dialog: addr (127.0.0.1:54955), resume (90 µs), read (352 µs), handle (97 µs), write (96 µs), total (638 µs)
 > Hello: User #8
-dialog: addr (127.0.0.1:61628), handshake (268 µs), read (2 ms), handle (89 µs), write (50 µs), total (3 ms)
+dialog: addr (127.0.0.1:54956), resume (60 µs), read (310 µs), handle (77 µs), write (102 µs), total (550 µs)
 > Hello: User #9
-dialog: addr (127.0.0.1:61629), handshake (413 µs), read (3 ms), handle (229 µs), write (85 µs), total (4 ms)
+dialog: addr (127.0.0.1:54957), resume (110 µs), read (319 µs), handle (84 µs), write (102 µs), total (617 µs)
 > Hello: User #10
-dialog: addr (127.0.0.1:61630), handshake (663 µs), read (3 ms), handle (88 µs), write (73 µs), total (4 ms)
+dialog: addr (127.0.0.1:54958), resume (75 µs), read (496 µs), handle (97 µs), write (91 µs), total (761 µs)
 ```
 
 * in the client stdout:
 
 ```text
-dialog: addr (127.0.0.1:8080), handshake (3 ms), write (90 µs), read (630 µs), total (3 ms)
+dialog: addr (127.0.0.1:8080), handshake (4 ms), write (616 µs), read (1 ms), total (6 ms)
 > Buy: User #1
-dialog: addr (127.0.0.1:8080), handshake (2 ms), write (34 µs), read (476 µs), total (3 ms)
+dialog: addr (127.0.0.1:8080), resume (620 µs), write (158 µs), read (392 µs), total (1 ms)
 > Buy: User #2
-dialog: addr (127.0.0.1:8080), handshake (2 ms), write (33 µs), read (331 µs), total (3 ms)
+dialog: addr (127.0.0.1:8080), resume (334 µs), write (56 µs), read (566 µs), total (956 µs)
 > Buy: User #3
-dialog: addr (127.0.0.1:8080), handshake (2 ms), write (43 µs), read (369 µs), total (3 ms)
+dialog: addr (127.0.0.1:8080), resume (318 µs), write (53 µs), read (329 µs), total (701 µs)
 > Buy: User #4
-dialog: addr (127.0.0.1:8080), handshake (2 ms), write (60 µs), read (415 µs), total (3 ms)
+dialog: addr (127.0.0.1:8080), resume (273 µs), write (54 µs), read (350 µs), total (678 µs)
 > Buy: User #5
-dialog: addr (127.0.0.1:8080), handshake (2 ms), write (48 µs), read (374 µs), total (3 ms)
+dialog: addr (127.0.0.1:8080), resume (331 µs), write (72 µs), read (408 µs), total (812 µs)
 > Buy: User #6
-dialog: addr (127.0.0.1:8080), handshake (2 ms), write (115 µs), read (800 µs), total (3 ms)
+dialog: addr (127.0.0.1:8080), resume (368 µs), write (157 µs), read (522 µs), total (1 ms)
 > Buy: User #7
-dialog: addr (127.0.0.1:8080), handshake (2 ms), write (54 µs), read (560 µs), total (3 ms)
+dialog: addr (127.0.0.1:8080), resume (384 µs), write (66 µs), read (480 µs), total (931 µs)
 > Buy: User #8
-dialog: addr (127.0.0.1:8080), handshake (3 ms), write (198 µs), read (992 µs), total (4 ms)
+dialog: addr (127.0.0.1:8080), resume (443 µs), write (105 µs), read (536 µs), total (1 ms)
 > Buy: User #9
-dialog: addr (127.0.0.1:8080), handshake (3 ms), write (53 µs), read (502 µs), total (4 ms)
+dialog: addr (127.0.0.1:8080), resume (539 µs), write (104 µs), read (588 µs), total (1 ms)
 > Buy: User #10
 ```
 
@@ -219,7 +224,6 @@ settings.SetLogger(yourLogger)
 ### Server
 
 * p2p.NewServer(tcp, stg) (srv, err) - creates a new server
-* srv.SetContext(ctx) - sets context
 * srv.SetHandle(topic, handler) - sets a handler that processes all request with defined topic
 * srv.Serve() (err) - starts to serve
 
