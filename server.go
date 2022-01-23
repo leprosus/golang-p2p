@@ -232,6 +232,7 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 	metrics.fixReadDuration()
 
 	s.mx.RLock()
+	ctx := s.ctx
 	handler, ok := s.handlers[msg.Topic]
 	s.mx.RUnlock()
 	if !ok {
@@ -240,7 +241,7 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), stg.Timeout.handle)
+	ctx, cancel := context.WithTimeout(ctx, stg.Timeout.handle)
 	defer cancel()
 
 	var req, res Data
