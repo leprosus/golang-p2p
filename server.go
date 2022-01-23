@@ -17,7 +17,7 @@ type Server struct {
 	handlers map[string]Handler
 }
 
-func NewServer(tcp *TCP, stg *ServerSettings) (s *Server, err error) {
+func NewServer(tcp *TCP) (s *Server, err error) {
 	var ck CipherKey
 	ck, err = NewCipherKey()
 	if err != nil {
@@ -28,13 +28,14 @@ func NewServer(tcp *TCP, stg *ServerSettings) (s *Server, err error) {
 
 	s = &Server{
 		tcp: tcp,
-		stg: stg,
 
 		ctx: context.Background(),
 
 		mx:       sync.RWMutex{},
 		handlers: map[string]Handler{},
 	}
+
+	s.stg = NewServerSettings()
 
 	s.rsa, err = NewRSA()
 
@@ -50,6 +51,12 @@ func (s *Server) SetHandle(topic string, handler Handler) {
 func (s *Server) SetContext(ctx context.Context) {
 	s.mx.Lock()
 	s.ctx = ctx
+	s.mx.Unlock()
+}
+
+func (s *Server) SetSettings(stg *ServerSettings) {
+	s.mx.Lock()
+	s.stg = stg
 	s.mx.Unlock()
 }
 

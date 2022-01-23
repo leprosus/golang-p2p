@@ -14,17 +14,24 @@ type Client struct {
 	mx sync.RWMutex
 }
 
-func NewClient(tcp *TCP, stg *ClientSettings) (c *Client, err error) {
+func NewClient(tcp *TCP) (c *Client, err error) {
 	c = &Client{
 		tcp: tcp,
-		stg: stg,
 
 		mx: sync.RWMutex{},
 	}
 
+	c.stg = NewClientSettings()
+
 	c.rsa, err = NewRSA()
 
 	return
+}
+
+func (c *Client) SetSettings(stg *ClientSettings) {
+	c.mx.Lock()
+	c.stg = stg
+	c.mx.Unlock()
 }
 
 func (c *Client) Send(topic string, req Data) (res Data, err error) {

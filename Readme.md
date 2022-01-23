@@ -41,9 +41,7 @@ type Buy struct {
 func main() {
 	tcp := p2p.NewTCP("localhost", "8080")
 
-	settings := p2p.NewServerSettings()
-
-	server, err := p2p.NewServer(tcp, settings)
+	server, err := p2p.NewServer(tcp)
 	if err != nil {
 		log.Panicln(err)
 	}
@@ -95,9 +93,7 @@ type Buy struct {
 func main() {
 	tcp := p2p.NewTCP("localhost", "8080")
 
-	settings := p2p.NewClientSettings()
-
-	client, err := p2p.NewClient(tcp, settings)
+	client, err := p2p.NewClient(tcp)
 	if err != nil {
 		log.Panicln(err)
 	}
@@ -222,7 +218,8 @@ settings.SetLogger(yourLogger)
 
 ### Server
 
-* p2p.NewServer(tcp, stg) (srv, err) - creates a new server
+* p2p.NewServer(tcp) (srv, err) - creates a new server
+* srv.SetSettings(stg) - sets settings
 * srv.SetHandle(topic, handler) - sets a handler that processes all request with defined topic
 * srv.SetContext(ctx) - sets context
 * srv.Serve() (err) - starts to serve
@@ -238,6 +235,7 @@ settings.SetLogger(yourLogger)
 ### Client
 
 * NewClient(tcp, stg) (clt, err) - creates a new client
+* clt.SetSettings(stg) - sets settings
 * clt.Send(topic, req) (res, err) - sends a request to a server by the topic
 
 ### Request

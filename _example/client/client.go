@@ -18,9 +18,7 @@ type Buy struct {
 func main() {
 	tcp := p2p.NewTCP("localhost", "8080")
 
-	settings := p2p.NewClientSettings()
-
-	client, err := p2p.NewClient(tcp, settings)
+	client, err := p2p.NewClient(tcp)
 	if err != nil {
 		log.Panicln(err)
 	}
