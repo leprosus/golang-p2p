@@ -27,7 +27,7 @@ func NewClient(tcp *TCP, stg *ClientSettings) (c *Client, err error) {
 	return
 }
 
-func (c *Client) Send(topic string, req Binary) (res Binary, err error) {
+func (c *Client) Send(topic string, req Data) (res Data, err error) {
 	var retries = c.stg.retries
 	for retries > 0 {
 		c.mx.RLock()
@@ -47,7 +47,7 @@ func (c *Client) Send(topic string, req Binary) (res Binary, err error) {
 	return
 }
 
-func (c *Client) try(topic string, req Binary) (res Binary, err error) {
+func (c *Client) try(topic string, req Data) (res Data, err error) {
 	var conn net.Conn
 	conn, err = net.Dial("tcp", c.tcp.addr)
 	if err != nil {
@@ -104,7 +104,6 @@ func (c *Client) try(topic string, req Binary) (res Binary, err error) {
 		return
 	}
 
-	res = &Data{}
 	res.SetBytes(msg.Content)
 
 	c.stg.Logger.Info(metrics.string())

@@ -243,9 +243,7 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 	ctx, cancel := context.WithTimeout(context.Background(), stg.Timeout.handle)
 	defer cancel()
 
-	var req, res Binary
-
-	req = &Data{}
+	var req, res Data
 	req.SetBytes(msg.Content)
 	res, err = handler(ctx, req)
 	if err != nil {

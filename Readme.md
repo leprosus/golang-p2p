@@ -48,7 +48,7 @@ func main() {
 		log.Panicln(err)
 	}
 
-	server.SetHandle("dialog", func(ctx context.Context, req p2p.Binary) (res p2p.Binary, err error) {
+	server.SetHandle("dialog", func(ctx context.Context, req p2p.Data) (res p2p.Data, err error) {
 		hello := Hello{}
 		err = req.GetGob(&hello)
 		if err != nil {
@@ -57,7 +57,7 @@ func main() {
 
 		fmt.Printf("> Hello: %s\n", hello.Text)
 
-		res = &p2p.Data{}
+		res = p2p.Data{}
 		err = res.SetGob(Buy{
 			Text: hello.Text,
 		})
@@ -102,11 +102,10 @@ func main() {
 		log.Panicln(err)
 	}
 
-	var req, res p2p.Binary
+	var req, res p2p.Data
 
 	for i := 0; i < 10; i++ {
-		req = &p2p.Data{}
-
+		req = p2p.Data{}
 		err = req.SetGob(Hello{
 			Text: fmt.Sprintf("User #%d", i+1),
 		})
@@ -114,7 +113,7 @@ func main() {
 			log.Panicln(err)
 		}
 
-		res = &p2p.Data{}
+		res = p2p.Data{}
 		res, err = client.Send("dialog", req)
 		if err != nil {
 			log.Panicln(err)
