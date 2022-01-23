@@ -84,7 +84,7 @@ func (s *Server) processConn(conn Conn, stg ServerSettings) {
 	var err error
 
 	defer func() {
-		err = conn.Close()
+		err := conn.Close()
 		if err != nil {
 			stg.Logger.Error(err.Error())
 		}

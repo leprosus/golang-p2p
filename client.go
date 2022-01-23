@@ -38,8 +38,6 @@ func (c *Client) Send(topic string, req Binary) (res Binary, err error) {
 
 		res, err = c.try(topic, req)
 		if err != nil {
-			c.stg.Logger.Error(err.Error())
-
 			continue
 		}
 
@@ -61,7 +59,7 @@ func (c *Client) try(topic string, req Binary) (res Binary, err error) {
 	}
 
 	defer func() {
-		err = conn.Close()
+		err := conn.Close()
 		if err != nil {
 			c.stg.Logger.Error(err.Error())
 		}
@@ -82,6 +80,8 @@ func (c *Client) try(topic string, req Binary) (res Binary, err error) {
 		var ck CipherKey
 		ck, err = c.doHandshake(wrapped, metrics)
 		if err != nil {
+			c.stg.Logger.Error(err.Error())
+
 			return
 		}
 
