@@ -7,16 +7,18 @@ import (
 )
 
 type Client struct {
-	tcp *TCP
-	rsa *RSA
-	stg *ClientSettings
+	tcp    *TCP
+	rsa    *RSA
+	stg    *ClientSettings
+	logger Logger
 
 	mx sync.RWMutex
 }
 
 func NewClient(tcp *TCP) (c *Client, err error) {
 	c = &Client{
-		tcp: tcp,
+		tcp:    tcp,
+		logger: NewStdLogger(),
 
 		mx: sync.RWMutex{},
 	}
@@ -31,6 +33,12 @@ func NewClient(tcp *TCP) (c *Client, err error) {
 func (c *Client) SetSettings(stg *ClientSettings) {
 	c.mx.Lock()
 	c.stg = stg
+	c.mx.Unlock()
+}
+
+func (c *Client) SetLogger(logger Logger) {
+	c.mx.Lock()
+	c.logger = logger
 	c.mx.Unlock()
 }
 
@@ -58,7 +66,7 @@ func (c *Client) try(topic string, req Data) (res Data, err error) {
 	var conn net.Conn
 	conn, err = net.Dial("tcp", c.tcp.addr)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		err = ConnectionError
 
@@ -68,14 +76,14 @@ func (c *Client) try(topic string, req Data) (res Data, err error) {
 	defer func() {
 		err := conn.Close()
 		if err != nil {
-			c.stg.Logger.Error(err.Error())
+			c.logger.Error(err.Error())
 		}
 	}()
 
 	var wrapped Conn
 	wrapped, err = NewConn(conn, c.stg.Limiter)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
@@ -87,7 +95,7 @@ func (c *Client) try(topic string, req Data) (res Data, err error) {
 		var ck CipherKey
 		ck, err = c.doHandshake(wrapped, metrics)
 		if err != nil {
-			c.stg.Logger.Error(err.Error())
+			c.logger.Error(err.Error())
 
 			return
 		}
@@ -113,7 +121,7 @@ func (c *Client) try(topic string, req Data) (res Data, err error) {
 
 	res.SetBytes(msg.Content)
 
-	c.stg.Logger.Info(metrics.string())
+	c.logger.Info(metrics.string())
 
 	return
 }
@@ -125,21 +133,21 @@ func (c *Client) doHandshake(conn Conn, metrics *Metrics) (ck CipherKey, err err
 
 	err = p.SetGob(c.rsa.PublicKey())
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
 
 	err = conn.WritePackage(p)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
 
 	err = conn.ReadPackage(&p)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
@@ -147,14 +155,14 @@ func (c *Client) doHandshake(conn Conn, metrics *Metrics) (ck CipherKey, err err
 	var cck CryptCipherKey
 	err = p.GetGob(&cck)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
 
 	ck, err = c.rsa.PrivateKey().Decode(cck)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
@@ -172,7 +180,7 @@ func (c *Client) doResume(conn Conn, metrics *Metrics) (err error) {
 	var bs []byte
 	bs, err = c.tcp.cipherKey.Encode([]byte(metrics.topic))
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
@@ -181,14 +189,14 @@ func (c *Client) doResume(conn Conn, metrics *Metrics) (err error) {
 
 	err = conn.WritePackage(p)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
 
 	err = conn.ReadPackage(&p)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
@@ -196,7 +204,7 @@ func (c *Client) doResume(conn Conn, metrics *Metrics) (err error) {
 	var rs ResumeStatus
 	err = p.GetGob(&rs)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
@@ -204,7 +212,7 @@ func (c *Client) doResume(conn Conn, metrics *Metrics) (err error) {
 	if rs == ResumeImpossible {
 		err = CipherKeyError
 
-		c.stg.Logger.Warn(err.Error())
+		c.logger.Warn(err.Error())
 
 		return
 	}
@@ -218,7 +226,7 @@ func (c *Client) doExchange(conn Conn, metrics *Metrics, in Message) (out Messag
 	var cm CryptMessage
 	cm, err = in.Encode(*c.tcp.cipherKey)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
@@ -228,14 +236,14 @@ func (c *Client) doExchange(conn Conn, metrics *Metrics, in Message) (out Messag
 	}
 	err = p.SetGob(cm)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
 
 	err = conn.WritePackage(p)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
@@ -244,21 +252,21 @@ func (c *Client) doExchange(conn Conn, metrics *Metrics, in Message) (out Messag
 
 	err = conn.ReadPackage(&p)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
 
 	err = p.GetGob(&cm)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
 
 	out, err = cm.Decode(*c.tcp.cipherKey)
 	if err != nil {
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}
@@ -268,7 +276,7 @@ func (c *Client) doExchange(conn Conn, metrics *Metrics, in Message) (out Messag
 	if out.Error != nil {
 		err = out.Error
 
-		c.stg.Logger.Error(err.Error())
+		c.logger.Error(err.Error())
 
 		return
 	}

@@ -7,9 +7,10 @@ import (
 )
 
 type Server struct {
-	tcp *TCP
-	rsa *RSA
-	stg *ServerSettings
+	tcp    *TCP
+	rsa    *RSA
+	stg    *ServerSettings
+	logger Logger
 
 	ctx context.Context
 
@@ -27,7 +28,8 @@ func NewServer(tcp *TCP) (s *Server, err error) {
 	tcp.cipherKey = &ck
 
 	s = &Server{
-		tcp: tcp,
+		tcp:    tcp,
+		logger: NewStdLogger(),
 
 		ctx: context.Background(),
 
@@ -60,6 +62,12 @@ func (s *Server) SetSettings(stg *ServerSettings) {
 	s.mx.Unlock()
 }
 
+func (s *Server) SetLogger(logger Logger) {
+	s.mx.Lock()
+	s.logger = logger
+	s.mx.Unlock()
+}
+
 func (s *Server) Serve() (err error) {
 	var listener net.Listener
 	listener, err = net.Listen("tcp", s.tcp.addr)
@@ -70,7 +78,7 @@ func (s *Server) Serve() (err error) {
 	defer func() {
 		err := listener.Close()
 		if err != nil {
-			s.stg.Logger.Error(err.Error())
+			s.logger.Error(err.Error())
 		}
 	}()
 
@@ -81,14 +89,14 @@ func (s *Server) Serve() (err error) {
 	for {
 		conn, err = listener.Accept()
 		if err != nil {
-			s.stg.Logger.Error(err.Error())
+			s.logger.Error(err.Error())
 
 			return
 		}
 
 		wrapped, err = NewConn(conn, s.stg.Limiter)
 		if err != nil {
-			s.stg.Logger.Error(err.Error())
+			s.logger.Error(err.Error())
 
 			return
 		}
@@ -103,14 +111,14 @@ func (s *Server) processConn(conn Conn, stg ServerSettings) {
 	defer func() {
 		err := conn.Close()
 		if err != nil {
-			stg.Logger.Error(err.Error())
+			s.logger.Error(err.Error())
 		}
 	}()
 
 	var p Package
 	err = conn.ReadPackage(&p)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
@@ -125,7 +133,7 @@ func (s *Server) processConn(conn Conn, stg ServerSettings) {
 	default:
 		err = UnsupportedPackage
 
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 	}
 	if err != nil {
 		return
@@ -133,7 +141,7 @@ func (s *Server) processConn(conn Conn, stg ServerSettings) {
 
 	err = conn.ReadPackage(&p)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
@@ -141,7 +149,7 @@ func (s *Server) processConn(conn Conn, stg ServerSettings) {
 	if p.Type != Exchange {
 		err = UnexpectedPackage
 
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
@@ -151,14 +159,14 @@ func (s *Server) processConn(conn Conn, stg ServerSettings) {
 		return
 	}
 
-	stg.Logger.Info(metrics.string())
+	s.logger.Info(metrics.string())
 }
 
 func (s *Server) doHandshake(conn Conn, p Package, stg ServerSettings, metrics *Metrics) (err error) {
 	var pk PublicKey
 	err = p.GetGob(&pk)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
@@ -166,21 +174,21 @@ func (s *Server) doHandshake(conn Conn, p Package, stg ServerSettings, metrics *
 	var cck CryptCipherKey
 	cck, err = pk.Encode(*s.tcp.cipherKey)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
 
 	err = p.SetGob(cck)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
 
 	err = conn.WritePackage(p)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
@@ -201,14 +209,14 @@ func (s *Server) doResume(conn Conn, p Package, stg ServerSettings, metrics *Met
 
 	err = p.SetGob(rs)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
 
 	err = conn.WritePackage(p)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
@@ -222,7 +230,7 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 	var cm CryptMessage
 	err = p.GetGob(&cm)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
@@ -230,7 +238,7 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 	var msg Message
 	msg, err = cm.Decode(*s.tcp.cipherKey)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
@@ -243,7 +251,7 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 	handler, ok := s.handlers[msg.Topic]
 	s.mx.RUnlock()
 	if !ok {
-		stg.Logger.Warn(UnsupportedTopic.Error())
+		s.logger.Warn(UnsupportedTopic.Error())
 
 		return
 	}
@@ -255,7 +263,7 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 	req.SetBytes(msg.Content)
 	res, err = handler(ctx, req)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 	}
 
 	msg.Content = res.GetBytes()
@@ -265,21 +273,21 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 
 	cm, err = msg.Encode(*s.tcp.cipherKey)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
 
 	err = p.SetGob(cm)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}
 
 	err = conn.WritePackage(p)
 	if err != nil {
-		stg.Logger.Error(err.Error())
+		s.logger.Error(err.Error())
 
 		return
 	}

@@ -5,12 +5,10 @@ import "time"
 type ClientSettings struct {
 	Limiter
 	Retry
-	Logger
 }
 
 func NewClientSettings() (stg *ClientSettings) {
 	return &ClientSettings{
-		Logger: NewStdLogger(),
 		Limiter: Limiter{
 			Timeout: Timeout{
 				conn: DefaultConnTimeout,
@@ -22,10 +20,6 @@ func NewClientSettings() (stg *ClientSettings) {
 			delay:   DefaultDelayTimeout,
 		},
 	}
-}
-
-func (stg *ClientSettings) SetLogger(l Logger) {
-	stg.Logger = l
 }
 
 func (stg *ClientSettings) SetConnTimeout(dur time.Duration) {

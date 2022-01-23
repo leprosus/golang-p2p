@@ -211,7 +211,6 @@ settings.SetLogger(yourLogger)
 ### Server settings initialization
 
 * p2p.NewServerSettings() (stg) - creates a new server's settings
-* stg.SetLogger(l) - reassigns server's logger
 * stg.SetConnTimeout(dur) - sets connection timout
 * stg.SetHandleTimeout(dur) - sets handle timout
 * stg.SetBodyLimit(limit) - sets max body size for reading
@@ -220,6 +219,7 @@ settings.SetLogger(yourLogger)
 
 * p2p.NewServer(tcp) (srv, err) - creates a new server
 * srv.SetSettings(stg) - sets settings
+* srv.SetLogger(l) - reassigns server's logger
 * srv.SetHandle(topic, handler) - sets a handler that processes all request with defined topic
 * srv.SetContext(ctx) - sets context
 * srv.Serve() (err) - starts to serve
@@ -227,7 +227,6 @@ settings.SetLogger(yourLogger)
 ### Client settings initialization
 
 * p2p.NewClientSettings() (stg) - creates a new server's settings
-* stg.SetLogger(l) - reassigns server's logger
 * stg.SetConnTimeout(dur) - sets connection timout
 * stg.SetBodyLimit(limit) - sets max body size for writing
 * stg.SetRetry(retries, delay) - sets retry parameters
@@ -236,6 +235,7 @@ settings.SetLogger(yourLogger)
 
 * NewClient(tcp, stg) (clt, err) - creates a new client
 * clt.SetSettings(stg) - sets settings
+* clt.SetLogger(l) - reassigns client's logger
 * clt.Send(topic, req) (res, err) - sends a request to a server by the topic
 
 ### Request

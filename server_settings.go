@@ -4,12 +4,10 @@ import "time"
 
 type ServerSettings struct {
 	Limiter
-	Logger
 }
 
 func NewServerSettings() (stg *ServerSettings) {
 	return &ServerSettings{
-		Logger: NewStdLogger(),
 		Limiter: Limiter{
 			Timeout: Timeout{
 				conn:   DefaultConnTimeout,
@@ -18,10 +16,6 @@ func NewServerSettings() (stg *ServerSettings) {
 			body: DefaultBodyLimit,
 		},
 	}
-}
-
-func (stg *ServerSettings) SetLogger(l Logger) {
-	stg.Logger = l
 }
 
 func (stg *ServerSettings) SetConnTimeout(dur time.Duration) {
