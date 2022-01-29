@@ -91,35 +91,37 @@ func (c *Client) try(topic string, req Data) (res Data, err error) {
 	metrics := newMetrics(conn.RemoteAddr().String())
 	metrics.setTopic(topic)
 
-	if c.tcp.cipherKey == nil {
-		var ck CipherKey
-		ck, err = c.doHandshake(wrapped, metrics)
-		if err != nil {
-			c.logger.Error(err.Error())
-
-			return
-		}
-
-		c.tcp.cipherKey = &ck
-	} else {
-		err = c.doResume(wrapped, metrics)
-		if err != nil {
-			c.tcp.cipherKey = nil
-
-			return
-		}
-	}
-
 	msg := Message{
 		Topic:   topic,
 		Content: req.GetBytes(),
 	}
-	msg, err = c.doExchange(wrapped, metrics, msg)
-	if err != nil {
-		return
-	}
 
-	res.SetBytes(msg.Content)
+	for {
+		if c.tcp.cipherKey == nil {
+			var ck CipherKey
+			ck, err = c.doHandshake(wrapped, metrics)
+			if err != nil {
+				break
+			}
+
+			c.tcp.cipherKey = &ck
+		} else {
+			msg, err = c.doExchange(wrapped, metrics, msg)
+			if err != nil {
+				c.tcp.cipherKey = nil
+
+				return
+			}
+
+			res.SetBytes(msg.Content)
+
+			break
+		}
+
+		if err != nil {
+			return
+		}
+	}
 
 	c.logger.Info(metrics.string())
 
@@ -172,56 +174,6 @@ func (c *Client) doHandshake(conn Conn, metrics *Metrics) (ck CipherKey, err err
 	return
 }
 
-func (c *Client) doResume(conn Conn, metrics *Metrics) (err error) {
-	p := Package{
-		Type: Resume,
-	}
-
-	var bs []byte
-	bs, err = c.tcp.cipherKey.Encode([]byte(metrics.topic))
-	if err != nil {
-		c.logger.Error(err.Error())
-
-		return
-	}
-
-	p.SetBytes(bs)
-
-	err = conn.WritePackage(p)
-	if err != nil {
-		c.logger.Error(err.Error())
-
-		return
-	}
-
-	err = conn.ReadPackage(&p)
-	if err != nil {
-		c.logger.Error(err.Error())
-
-		return
-	}
-
-	var rs ResumeStatus
-	err = p.GetGob(&rs)
-	if err != nil {
-		c.logger.Error(err.Error())
-
-		return
-	}
-
-	if rs == ResumeImpossible {
-		err = CipherKeyError
-
-		c.logger.Warn(err.Error())
-
-		return
-	}
-
-	metrics.fixResume()
-
-	return
-}
-
 func (c *Client) doExchange(conn Conn, metrics *Metrics, in Message) (out Message, err error) {
 	var cm CryptMessage
 	cm, err = in.Encode(*c.tcp.cipherKey)
@@ -253,6 +205,12 @@ func (c *Client) doExchange(conn Conn, metrics *Metrics, in Message) (out Messag
 	err = conn.ReadPackage(&p)
 	if err != nil {
 		c.logger.Error(err.Error())
+
+		return
+	}
+
+	if p.Type == Error {
+		_ = p.GetGob(&err)
 
 		return
 	}

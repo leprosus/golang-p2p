@@ -13,7 +13,6 @@ type Metrics struct {
 	tm time.Time
 
 	handshake time.Duration
-	resume    time.Duration
 	read      time.Duration
 	handle    time.Duration
 	write     time.Duration
@@ -27,7 +26,6 @@ func newMetrics(addr string) (m *Metrics) {
 		tm:   time.Now(),
 
 		handshake: -1,
-		resume:    -1,
 		read:      -1,
 		handle:    -1,
 		write:     -1,
@@ -49,12 +47,6 @@ const statPattern = "%s (%s)"
 func (m *Metrics) fixHandshake() {
 	m.handshake = time.Since(m.tm)
 	m.stat = append(m.stat, fmt.Sprintf(statPattern, "handshake", prepareValue(m.handshake)))
-	m.reset()
-}
-
-func (m *Metrics) fixResume() {
-	m.resume = time.Since(m.tm)
-	m.stat = append(m.stat, fmt.Sprintf(statPattern, "resume", prepareValue(m.resume)))
 	m.reset()
 }
 
@@ -81,10 +73,6 @@ func (m *Metrics) string() (line string) {
 
 	if m.handshake >= 0 {
 		total += m.handshake
-	}
-
-	if m.resume >= 0 {
-		total += m.resume
 	}
 
 	if m.read >= 0 {

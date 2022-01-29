@@ -134,49 +134,50 @@ If you run the server and the client separately then you see:
 
 ```text
 > Hello: User #1
-dialog: addr (127.0.0.1:54949), handshake (426 µs), read (4 ms), handle (240 µs), write (215 µs), total (5 ms)
+dialog: addr (127.0.0.1:50099), handshake (2 ms), read (7 ms), handle (278 µs), write (301 µs), total (10 ms)
 > Hello: User #2
-dialog: addr (127.0.0.1:54950), resume (85 µs), read (456 µs), handle (61 µs), write (65 µs), total (669 µs)
+dialog: addr (127.0.0.1:50100), read (743 µs), handle (238 µs), write (219 µs), total (1 ms)
 > Hello: User #3
-dialog: addr (127.0.0.1:54951), resume (65 µs), read (409 µs), handle (71 µs), write (73 µs), total (619 µs)
+dialog: addr (127.0.0.1:50101), read (834 µs), handle (233 µs), write (228 µs), total (1 ms)
 > Hello: User #4
-dialog: addr (127.0.0.1:54952), resume (58 µs), read (237 µs), handle (48 µs), write (56 µs), total (400 µs)
+dialog: addr (127.0.0.1:50102), read (547 µs), handle (227 µs), write (260 µs), total (1 ms)
 > Hello: User #5
-dialog: addr (127.0.0.1:54953), resume (62 µs), read (209 µs), handle (45 µs), write (59 µs), total (377 µs)
+dialog: addr (127.0.0.1:50103), read (625 µs), handle (230 µs), write (271 µs), total (1 ms)
 > Hello: User #6
-dialog: addr (127.0.0.1:54954), resume (51 µs), read (284 µs), handle (74 µs), write (59 µs), total (469 µs)
+dialog: addr (127.0.0.1:50104), read (602 µs), handle (241 µs), write (234 µs), total (1 ms)
 > Hello: User #7
-dialog: addr (127.0.0.1:54955), resume (90 µs), read (352 µs), handle (97 µs), write (96 µs), total (638 µs)
+dialog: addr (127.0.0.1:50105), read (589 µs), handle (258 µs), write (227 µs), total (1 ms)
 > Hello: User #8
-dialog: addr (127.0.0.1:54956), resume (60 µs), read (310 µs), handle (77 µs), write (102 µs), total (550 µs)
+dialog: addr (127.0.0.1:50106), read (635 µs), handle (232 µs), write (221 µs), total (1 ms)
 > Hello: User #9
-dialog: addr (127.0.0.1:54957), resume (110 µs), read (319 µs), handle (84 µs), write (102 µs), total (617 µs)
+dialog: addr (127.0.0.1:50107), read (1 ms), handle (376 µs), write (365 µs), total (1 ms)
 > Hello: User #10
-dialog: addr (127.0.0.1:54958), resume (75 µs), read (496 µs), handle (97 µs), write (91 µs), total (761 µs)
+dialog: addr (127.0.0.1:50108), read (635 µs), handle (370 µs), write (434 µs), total (1 ms)
+
 ```
 
 * in the client stdout:
 
 ```text
-dialog: addr (127.0.0.1:8080), handshake (4 ms), write (616 µs), read (1 ms), total (6 ms)
+dialog: addr (127.0.0.1:8080), handshake (8 ms), write (480 µs), read (1 ms), total (10 ms)
 > Buy: User #1
-dialog: addr (127.0.0.1:8080), resume (620 µs), write (158 µs), read (392 µs), total (1 ms)
+dialog: addr (127.0.0.1:8080), write (342 µs), read (1 ms), total (1 ms)
 > Buy: User #2
-dialog: addr (127.0.0.1:8080), resume (334 µs), write (56 µs), read (566 µs), total (956 µs)
+dialog: addr (127.0.0.1:8080), write (451 µs), read (1 ms), total (1 ms)
 > Buy: User #3
-dialog: addr (127.0.0.1:8080), resume (318 µs), write (53 µs), read (329 µs), total (701 µs)
+dialog: addr (127.0.0.1:8080), write (226 µs), read (1 ms), total (1 ms)
 > Buy: User #4
-dialog: addr (127.0.0.1:8080), resume (273 µs), write (54 µs), read (350 µs), total (678 µs)
+dialog: addr (127.0.0.1:8080), write (246 µs), read (1 ms), total (1 ms)
 > Buy: User #5
-dialog: addr (127.0.0.1:8080), resume (331 µs), write (72 µs), read (408 µs), total (812 µs)
+dialog: addr (127.0.0.1:8080), write (262 µs), read (1 ms), total (1 ms)
 > Buy: User #6
-dialog: addr (127.0.0.1:8080), resume (368 µs), write (157 µs), read (522 µs), total (1 ms)
+dialog: addr (127.0.0.1:8080), write (262 µs), read (1 ms), total (1 ms)
 > Buy: User #7
-dialog: addr (127.0.0.1:8080), resume (384 µs), write (66 µs), read (480 µs), total (931 µs)
+dialog: addr (127.0.0.1:8080), write (247 µs), read (1 ms), total (1 ms)
 > Buy: User #8
-dialog: addr (127.0.0.1:8080), resume (443 µs), write (105 µs), read (536 µs), total (1 ms)
+dialog: addr (127.0.0.1:8080), write (599 µs), read (2 ms), total (2 ms)
 > Buy: User #9
-dialog: addr (127.0.0.1:8080), resume (539 µs), write (104 µs), read (588 µs), total (1 ms)
+dialog: addr (127.0.0.1:8080), write (259 µs), read (2 ms), total (2 ms)
 > Buy: User #10
 ```
 

@@ -106,8 +106,6 @@ func (s *Server) Serve() (err error) {
 }
 
 func (s *Server) processConn(conn Conn, stg ServerSettings) {
-	var err error
-
 	defer func() {
 		err := conn.Close()
 		if err != nil {
@@ -115,6 +113,28 @@ func (s *Server) processConn(conn Conn, stg ServerSettings) {
 		}
 	}()
 
+	var (
+		metrics  = newMetrics(conn.RemoteAddr().String())
+		isFinish bool
+		err      error
+	)
+	for {
+		isFinish, err = s.processPackage(conn, stg, metrics)
+		if isFinish || err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		s.logger.Error(err.Error())
+
+		return
+	}
+
+	s.logger.Info(metrics.string())
+}
+
+func (s *Server) processPackage(conn Conn, stg ServerSettings, metrics *Metrics) (isFinish bool, err error) {
 	var p Package
 	err = conn.ReadPackage(&p)
 	if err != nil {
@@ -123,46 +143,21 @@ func (s *Server) processConn(conn Conn, stg ServerSettings) {
 		return
 	}
 
-	metrics := newMetrics(conn.RemoteAddr().String())
-
 	switch p.Type {
 	case Handshake:
-		err = s.doHandshake(conn, p, stg, metrics)
-	case Resume:
-		err = s.doResume(conn, p, stg, metrics)
+		err = s.doHandshake(conn, p, metrics)
+	case Exchange:
+		isFinish = true
+
+		err = s.doExchange(conn, p, stg, metrics)
 	default:
 		err = UnsupportedPackage
-
-		s.logger.Error(err.Error())
-	}
-	if err != nil {
-		return
 	}
 
-	err = conn.ReadPackage(&p)
-	if err != nil {
-		s.logger.Error(err.Error())
-
-		return
-	}
-
-	if p.Type != Exchange {
-		err = UnexpectedPackage
-
-		s.logger.Error(err.Error())
-
-		return
-	}
-
-	err = s.doExchange(conn, p, stg, metrics)
-	if err != nil {
-		return
-	}
-
-	s.logger.Info(metrics.string())
+	return
 }
 
-func (s *Server) doHandshake(conn Conn, p Package, stg ServerSettings, metrics *Metrics) (err error) {
+func (s *Server) doHandshake(conn Conn, p Package, metrics *Metrics) (err error) {
 	var pk PublicKey
 	err = p.GetGob(&pk)
 	if err != nil {
@@ -198,34 +193,6 @@ func (s *Server) doHandshake(conn Conn, p Package, stg ServerSettings, metrics *
 	return
 }
 
-func (s *Server) doResume(conn Conn, p Package, stg ServerSettings, metrics *Metrics) (err error) {
-	var rs = ResumeImpossible
-
-	var bs = p.GetBytes()
-	_, err = s.tcp.cipherKey.Decode(bs)
-	if err == nil {
-		rs = ResumePossible
-	}
-
-	err = p.SetGob(rs)
-	if err != nil {
-		s.logger.Error(err.Error())
-
-		return
-	}
-
-	err = conn.WritePackage(p)
-	if err != nil {
-		s.logger.Error(err.Error())
-
-		return
-	}
-
-	metrics.fixResume()
-
-	return
-}
-
 func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *Metrics) (err error) {
 	var cm CryptMessage
 	err = p.GetGob(&cm)
@@ -238,7 +205,12 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 	var msg Message
 	msg, err = cm.Decode(*s.tcp.cipherKey)
 	if err != nil {
-		s.logger.Error(err.Error())
+		s.logger.Warn(err.Error())
+
+		err = s.sendError(conn, metrics)
+		if err != nil {
+			s.logger.Error(err.Error())
+		}
 
 		return
 	}
@@ -256,7 +228,8 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, stg.Timeout.handle)
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, stg.Timeout.handle)
 	defer cancel()
 
 	var req, res Data
@@ -283,6 +256,23 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 		s.logger.Error(err.Error())
 
 		return
+	}
+
+	err = conn.WritePackage(p)
+	if err != nil {
+		s.logger.Error(err.Error())
+
+		return
+	}
+
+	metrics.fixWriteDuration()
+
+	return
+}
+
+func (s *Server) sendError(conn Conn, metrics *Metrics) (err error) {
+	p := Package{
+		Type: Error,
 	}
 
 	err = conn.WritePackage(p)
