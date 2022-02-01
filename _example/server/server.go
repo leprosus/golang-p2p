@@ -24,7 +24,7 @@ func main() {
 		log.Panicln(err)
 	}
 
-	server.SetHandle("dialog", func(ctx context.Context, req p2p.Data) (res p2p.Data, err error) {
+	server.SetHandler("dialog", func(ctx context.Context, req p2p.Data) (res p2p.Data, err error) {
 		hello := Hello{}
 		err = req.GetGob(&hello)
 		if err != nil {

@@ -46,7 +46,7 @@ func main() {
 		log.Panicln(err)
 	}
 
-	server.SetHandle("dialog", func(ctx context.Context, req p2p.Data) (res p2p.Data, err error) {
+	server.SetHandler("dialog", func(ctx context.Context, req p2p.Data) (res p2p.Data, err error) {
 		hello := Hello{}
 		err = req.GetGob(&hello)
 		if err != nil {
@@ -211,50 +211,41 @@ settings.SetLogger(yourLogger)
 
 ### Server settings initialization
 
-* p2p.NewServerSettings() (stg) - creates a new server's settings
-* stg.SetConnTimeout(dur) - sets connection timout
-* stg.SetHandleTimeout(dur) - sets handle timout
-* stg.SetBodyLimit(limit) - sets max body size for reading
+* p2p.NewServerSettings() (settings) - creates a new server's settings
+* settings.SetConnTimeout(duration) - sets connection timout
+* settings.SetHandleTimeout(duration) - sets handle timout
+* settings.SetBodyLimit(limit) - sets max body size for reading
 
 ### Server
 
-* p2p.NewServer(tcp) (srv, err) - creates a new server
-* srv.SetSettings(stg) - sets settings
-* srv.SetLogger(l) - reassigns server's logger
-* srv.SetHandle(topic, handler) - sets a handler that processes all request with defined topic
-* srv.SetContext(ctx) - sets context
-* srv.Serve() (err) - starts to serve
+* p2p.NewServer(tcp) (server, error) - creates a new server
+* server.SetSettings(settings) - sets server settings
+* server.SetLogger(logger) - reassigns server's logger
+* server.SetHandler(topic, handler) - sets a handler that processes all request with defined topic
+* server.SetContext(context) - sets context
+* server.GetContext() (context) - returns context
+* server.Serve() (error) - starts to serve
 
 ### Client settings initialization
 
-* p2p.NewClientSettings() (stg) - creates a new server's settings
-* stg.SetConnTimeout(dur) - sets connection timout
-* stg.SetBodyLimit(limit) - sets max body size for writing
-* stg.SetRetry(retries, delay) - sets retry parameters
+* p2p.NewClientSettings() (settings) - creates a new server's settings
+* settings.SetConnTimeout(duration) - sets connection timout
+* settings.SetBodyLimit(limit) - sets max body size for writing
+* settings.SetRetry(retries, delay) - sets retry parameters
 
 ### Client
 
-* NewClient(tcp, stg) (clt, err) - creates a new client
-* clt.SetSettings(stg) - sets settings
-* clt.SetLogger(l) - reassigns client's logger
-* clt.Send(topic, req) (res, err) - sends a request to a server by the topic
+* NewClient(tcp, settings) (client, error) - creates a new client
+* client.SetSettings(settings) - sets client settings
+* client.SetLogger(logger) - reassigns client's logger
+* client.Send(topic, request) (response, error) - sends a request to a server by the topic
 
-### Request
+### Request and Response
 
-* req.SetBytes(bs) - sets bytes to the request
-* req.GetBytes() (bs) - gets bytes from the request
-* req.SetGob(obj) (err) - encodes to Gob and sets structure to the request
-* req.GetGob(obj) (err) - decode from Gob and gets structure from the request
-* req.SetJson(obj) (err) - encodes to Json and sets structure to the request
-* req.GetJson(obj) (err) - decode from Json and gets structure from the request
-* req.String() (str) - returns string from the request
-
-### Response
-
-* res.SetBytes(bs) - sets bytes to the response
-* res.GetBytes() (bs) - gets bytes from the response
-* res.SetGob(obj) (err) - encodes to Gob and sets structure to the response
-* res.GetGob(obj) (err) - decode from Gob and gets structure from the response
-* res.SetJson(obj) (err) - encodes to Json and sets structure to the response
-* res.GetJson(obj) (err) - decode from Json and gets structure from the response
-* res.String() (str) - returns string from the response
+* data.SetBytes(bytes) - sets bytes to the request/response
+* data.GetBytes() (bytes) - gets bytes from the request/response
+* data.SetGob(obj) (error) - encodes to Gob and sets structure to the request/response
+* data.GetGob(obj) (error) - decode from Gob and gets structure from the request/response
+* data.SetJson(obj) (error) - encodes to JSON and sets structure to the request/response
+* data.GetJson(obj) (error) - decode from JSON and gets structure from the request/response
+* data.String() (string) - returns string from the request/response

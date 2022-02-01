@@ -7,10 +7,11 @@ import (
 )
 
 type Server struct {
-	tcp    *TCP
-	rsa    *RSA
-	stg    *ServerSettings
-	logger Logger
+	tcp *TCP
+	rsa *RSA
+
+	settings *ServerSettings
+	logger   Logger
 
 	ctx context.Context
 
@@ -37,14 +38,14 @@ func NewServer(tcp *TCP) (s *Server, err error) {
 		handlers: map[string]Handler{},
 	}
 
-	s.stg = NewServerSettings()
+	s.settings = NewServerSettings()
 
 	s.rsa, err = NewRSA()
 
 	return
 }
 
-func (s *Server) SetHandle(topic string, handler Handler) {
+func (s *Server) SetHandler(topic string, handler Handler) {
 	s.mx.Lock()
 	s.handlers[topic] = handler
 	s.mx.Unlock()
@@ -56,16 +57,18 @@ func (s *Server) SetContext(ctx context.Context) {
 	s.mx.Unlock()
 }
 
-func (s *Server) SetSettings(stg *ServerSettings) {
-	s.mx.Lock()
-	s.stg = stg
-	s.mx.Unlock()
+func (s *Server) GetContext() (ctx context.Context) {
+	s.mx.RLock()
+	defer s.mx.RUnlock()
+	return s.ctx
+}
+
+func (s *Server) SetSettings(settings *ServerSettings) {
+	s.settings = settings
 }
 
 func (s *Server) SetLogger(logger Logger) {
-	s.mx.Lock()
 	s.logger = logger
-	s.mx.Unlock()
 }
 
 func (s *Server) Serve() (err error) {
@@ -94,18 +97,18 @@ func (s *Server) Serve() (err error) {
 			return
 		}
 
-		wrapped, err = NewConn(conn, s.stg.Limiter)
+		wrapped, err = NewConn(conn, s.settings.Limiter)
 		if err != nil {
 			s.logger.Error(err.Error())
 
 			return
 		}
 
-		go s.processConn(wrapped, *s.stg)
+		go s.processConn(wrapped, *s.settings)
 	}
 }
 
-func (s *Server) processConn(conn Conn, stg ServerSettings) {
+func (s *Server) processConn(conn Conn, settings ServerSettings) {
 	defer func() {
 		err := conn.Close()
 		if err != nil {
@@ -114,13 +117,26 @@ func (s *Server) processConn(conn Conn, stg ServerSettings) {
 	}()
 
 	var (
-		metrics  = newMetrics(conn.RemoteAddr().String())
-		isFinish bool
-		err      error
+		p Package
+
+		metrics = newMetrics(conn.RemoteAddr().String())
+
+		err error
 	)
 	for {
-		isFinish, err = s.processPackage(conn, stg, metrics)
-		if isFinish || err != nil {
+		err = conn.ReadPackage(&p)
+		if err != nil {
+			s.logger.Error(err.Error())
+
+			return
+		}
+
+		err = s.processPackage(conn, settings, p, metrics)
+		if p.Type == Exchange {
+			break
+		}
+
+		if err != nil {
 			break
 		}
 	}
@@ -134,22 +150,12 @@ func (s *Server) processConn(conn Conn, stg ServerSettings) {
 	s.logger.Info(metrics.string())
 }
 
-func (s *Server) processPackage(conn Conn, stg ServerSettings, metrics *Metrics) (isFinish bool, err error) {
-	var p Package
-	err = conn.ReadPackage(&p)
-	if err != nil {
-		s.logger.Error(err.Error())
-
-		return
-	}
-
+func (s *Server) processPackage(conn Conn, settings ServerSettings, p Package, metrics *Metrics) (err error) {
 	switch p.Type {
 	case Handshake:
 		err = s.doHandshake(conn, p, metrics)
 	case Exchange:
-		isFinish = true
-
-		err = s.doExchange(conn, p, stg, metrics)
+		err = s.doExchange(conn, p, settings, metrics)
 	default:
 		err = UnsupportedPackage
 	}
@@ -193,7 +199,7 @@ func (s *Server) doHandshake(conn Conn, p Package, metrics *Metrics) (err error)
 	return
 }
 
-func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *Metrics) (err error) {
+func (s *Server) doExchange(conn Conn, p Package, settings ServerSettings, metrics *Metrics) (err error) {
 	var cm CryptMessage
 	err = p.GetGob(&cm)
 	if err != nil {
@@ -218,19 +224,26 @@ func (s *Server) doExchange(conn Conn, p Package, stg ServerSettings, metrics *M
 	metrics.setTopic(msg.Topic)
 	metrics.fixReadDuration()
 
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+
+		handler Handler
+		ok      bool
+	)
+
 	s.mx.RLock()
-	ctx := s.ctx
-	handler, ok := s.handlers[msg.Topic]
+	ctx, cancel = context.WithTimeout(s.ctx, settings.Timeout.handle)
+	defer cancel()
+
+	handler, ok = s.handlers[msg.Topic]
 	s.mx.RUnlock()
+
 	if !ok {
 		s.logger.Warn(UnsupportedTopic.Error())
 
 		return
 	}
-
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, stg.Timeout.handle)
-	defer cancel()
 
 	var req, res Data
 	req.SetBytes(msg.Content)

@@ -7,10 +7,11 @@ import (
 )
 
 type Client struct {
-	tcp    *TCP
-	rsa    *RSA
-	stg    *ClientSettings
-	logger Logger
+	tcp *TCP
+	rsa *RSA
+
+	settings *ClientSettings
+	logger   Logger
 
 	mx sync.RWMutex
 }
@@ -23,32 +24,28 @@ func NewClient(tcp *TCP) (c *Client, err error) {
 		mx: sync.RWMutex{},
 	}
 
-	c.stg = NewClientSettings()
+	c.settings = NewClientSettings()
 
 	c.rsa, err = NewRSA()
 
 	return
 }
 
-func (c *Client) SetSettings(stg *ClientSettings) {
-	c.mx.Lock()
-	c.stg = stg
-	c.mx.Unlock()
+func (c *Client) SetSettings(settings *ClientSettings) {
+	c.settings = settings
 }
 
 func (c *Client) SetLogger(logger Logger) {
-	c.mx.Lock()
 	c.logger = logger
-	c.mx.Unlock()
 }
 
 func (c *Client) Send(topic string, req Data) (res Data, err error) {
-	var retries = c.stg.retries
+	var retries = c.settings.retries
 	for retries > 0 {
 		c.mx.RLock()
-		factor := c.stg.retries - retries
+		factor := c.settings.retries - retries
 		c.mx.RUnlock()
-		time.Sleep(time.Duration(factor) * c.stg.delay)
+		time.Sleep(time.Duration(factor) * c.settings.delay)
 		retries--
 
 		res, err = c.try(topic, req)
@@ -81,7 +78,7 @@ func (c *Client) try(topic string, req Data) (res Data, err error) {
 	}()
 
 	var wrapped Conn
-	wrapped, err = NewConn(conn, c.stg.Limiter)
+	wrapped, err = NewConn(conn, c.settings.Limiter)
 	if err != nil {
 		c.logger.Error(err.Error())
 
