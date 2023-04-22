@@ -55,7 +55,7 @@ func (d *Data) GetJson(val interface{}) (err error) {
 	return
 }
 
-func (d *Data) setAddr(s string) {
+func (d *Data) SetAddr(s string) {
 	d.addr = s
 }
 
