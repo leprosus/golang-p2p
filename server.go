@@ -247,6 +247,7 @@ func (s *Server) doExchange(conn Conn, p Package, settings ServerSettings, metri
 
 	var req, res Data
 	req.SetBytes(msg.Content)
+	req.setAddr(conn.RemoteAddr().String())
 	res, err = handler(ctx, req)
 	if err != nil {
 		s.logger.Error(err.Error())

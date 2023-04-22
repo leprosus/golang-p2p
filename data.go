@@ -8,6 +8,7 @@ import (
 
 type Data struct {
 	Bytes []byte
+	addr  string
 }
 
 func (d *Data) SetBytes(bs []byte) {
@@ -52,6 +53,10 @@ func (d *Data) GetJson(val interface{}) (err error) {
 	err = json.NewDecoder(bytes.NewReader(d.Bytes)).Decode(val)
 
 	return
+}
+
+func (d *Data) setAddr(s string) {
+	d.addr = s
 }
 
 func (d *Data) String() (str string) {
