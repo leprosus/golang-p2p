@@ -8,7 +8,7 @@ import (
 
 type Data struct {
 	Bytes []byte
-	addr  string
+	Addr  string
 }
 
 func (d *Data) SetBytes(bs []byte) {
@@ -56,7 +56,7 @@ func (d *Data) GetJson(val interface{}) (err error) {
 }
 
 func (d *Data) SetAddr(s string) {
-	d.addr = s
+	d.Addr = s
 }
 
 func (d *Data) String() (str string) {
